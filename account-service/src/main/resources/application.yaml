@@ -1,0 +1,108 @@
+spring:
+  application:
+    name: account-service
+
+  profiles:
+    # Running without -Dspring.profiles.active is a developer's machine, so the plain
+    # console pattern applies and structured JSON is reserved for deployed profiles.
+    default: local
+
+  threads:
+    virtual:
+      enabled: true
+
+  datasource:
+    url: ${SPENDLY_ACCOUNT_DB_URL:jdbc:postgresql://localhost:5432/spendly_account}
+    username: ${SPENDLY_DB_USER}
+    password: ${SPENDLY_DB_PASSWORD}
+    hikari:
+      pool-name: spendly-account-pool
+      # Sized, not defaulted. Postings lock the account row (SELECT ... FOR UPDATE) for the
+      # length of one short transaction, so a handful of connections cover the write path
+      # and the rest serve owner-scoped reads. Raise it against a measured wait time.
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 3000
+      max-lifetime: 600000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${SPENDLY_OIDC_ISSUER}
+          audiences:
+            - spendly-api
+
+server:
+  port: ${SERVER_PORT:8083}
+  error:
+    include-message: never
+    include-stacktrace: never
+
+spendly:
+  cors:
+    allowed-origins: ${SPENDLY_CORS_ORIGINS:http://localhost:4200}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+management:
+  server:
+    # Actuator lives on its own connector so the public port exposes no ops surface at all.
+    # In compose and k8s this port is reachable inside the network only.
+    port: ${MANAGEMENT_PORT:9083}
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when-authorized
+  metrics:
+    tags:
+      application: ${spring.application.name}
+  tracing:
+    sampling:
+      # Everything locally; a deployed profile lowers this.
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: ${SPENDLY_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+
+logging:
+  level:
+    com.spendly: DEBUG
+  pattern:
+    console: "%d{HH:mm:ss.SSS} %-5level [%X{correlationId:-no-correlation-id}] %logger{36} - %msg%n"
+
+---
+# Structured logs everywhere except a developer's terminal (CLAUDE.md 11). Boot 4 emits ECS
+# JSON natively, so no logstash encoder dependency is needed.
+spring:
+  config:
+    activate:
+      on-profile: "!local & !test"
+
+logging:
+  structured:
+    format:
+      console: ecs

@@ -21,6 +21,7 @@
     <module>common</module>
     <module>events</module>
     <module>user-service</module>
+    <module>account-service</module>
   </modules>
 
   <properties>

@@ -3,8 +3,6 @@ package com.spendly.userservice;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.test.context.ActiveProfiles;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
@@ -15,15 +13,18 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * {@code ddl-auto=validate} check are exercised against the engine the application actually ships on.
  *
  * <p>
- * The container is static, so one instance is shared by every subclass for the whole test run instead of being started
- * per class.
+ * The container is started once in a static initialiser and never stopped by a JUnit extension: Spring caches the
+ * application context (and its connection pool) across test classes, so a container that {@code @Testcontainers}
+ * restarted per class would leave every later class holding a pool bound to a port that no longer exists.
  */
-@Testcontainers
 @ActiveProfiles("test")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 public abstract class AbstractIntegrationTest {
 
-    @Container
     @ServiceConnection
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:17-alpine");
+
+    static {
+        POSTGRES.start();
+    }
 }

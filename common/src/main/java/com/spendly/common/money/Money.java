@@ -1,5 +1,7 @@
 package com.spendly.common.money;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+import jakarta.persistence.Embeddable;
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -7,6 +9,8 @@ import java.util.ArrayList;
 import java.util.Currency;
 import java.util.List;
 import java.util.Objects;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * An immutable monetary amount in a single currency.
@@ -18,8 +22,24 @@ import java.util.Objects;
  *
  * <p>
  * Arithmetic between different currencies is rejected rather than silently converted.
+ *
+ * <p>
+ * Persistence: a JPA {@code @Embeddable}, so a service maps it onto the {@code <x>_value numeric(19,4)} +
+ * {@code <x>_currency char(3)} column pair with two {@code @AttributeOverride}s (CLAUDE.md 6.4). Hibernate compares
+ * {@code BigDecimal} attributes with {@code compareTo}, so the scale normalisation above never registers as a dirty
+ * change.
+ *
+ * <p>
+ * Wire format: {@code {"amount": "10.50", "currency": "USD"}}. The amount is a decimal <em>string</em> because a JSON
+ * number is parsed through an IEEE-754 double by every JavaScript client before a decimal library can see it.
  */
-public record Money(BigDecimal amount, Currency currency) implements Comparable<Money>, Serializable {
+@Embeddable
+public record Money(
+        @JsonFormat(shape = JsonFormat.Shape.STRING) BigDecimal amount,
+        @JdbcTypeCode(SqlTypes.CHAR) Currency currency)
+        implements
+            Comparable<Money>,
+            Serializable {
 
     /**
      * Banker's rounding. Half-up biases every tie upward, which accumulates a systematic drift across a ledger;
@@ -71,6 +91,10 @@ public record Money(BigDecimal amount, Currency currency) implements Comparable<
 
     public Money multipliedBy(BigDecimal factor) {
         return new Money(amount.multiply(factor), currency);
+    }
+
+    public Money dividedBy(BigDecimal divisor) {
+        return new Money(amount.divide(divisor, scaleOf(currency), ROUNDING), currency);
     }
 
     public Money negated() {
@@ -148,8 +172,11 @@ public record Money(BigDecimal amount, Currency currency) implements Comparable<
         }
     }
 
-    /** Pseudo-currencies such as XAU report -1 fraction digits; treat those as whole units. */
-    private static int scaleOf(Currency currency) {
+    /**
+     * The number of decimal places this currency is booked at: 2 for USD, 0 for JPY, 3 for BHD. Pseudo-currencies such
+     * as XAU report -1 fraction digits; treat those as whole units.
+     */
+    public static int scaleOf(Currency currency) {
         return Math.max(currency.getDefaultFractionDigits(), 0);
     }
 }

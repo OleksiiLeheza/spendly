@@ -1,6 +1,6 @@
 package com.spendly.userservice.domain;
 
-import com.spendly.userservice.domain.common.BaseEntityAudit;
+import com.spendly.common.persistence.BaseEntityAudit;
 import com.spendly.userservice.domain.enums.Role;
 import com.spendly.userservice.domain.enums.UserStatus;
 import jakarta.persistence.Column;

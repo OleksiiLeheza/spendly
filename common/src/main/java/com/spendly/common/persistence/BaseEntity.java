@@ -1,4 +1,4 @@
-package com.spendly.userservice.domain.common;
+package com.spendly.common.persistence;
 
 import com.spendly.common.id.UuidV7Generator;
 import jakarta.persistence.Column;
@@ -6,13 +6,9 @@ import jakarta.persistence.Id;
 import jakarta.persistence.MappedSuperclass;
 import java.util.Objects;
 import java.util.UUID;
-import lombok.Getter;
-import lombok.Setter;
 import org.hibernate.annotations.UuidGenerator;
 import org.hibernate.proxy.HibernateProxy;
 
-@Getter
-@Setter
 @MappedSuperclass
 public abstract class BaseEntity {
 
@@ -20,6 +16,14 @@ public abstract class BaseEntity {
     @UuidGenerator(algorithm = UuidV7Generator.class)
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
+
+    public UUID getId() {
+        return id;
+    }
+
+    public void setId(UUID id) {
+        this.id = id;
+    }
 
     @Override
     public final boolean equals(Object other) {

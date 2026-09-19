@@ -25,10 +25,17 @@
             <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
             <scope>provided</scope>
         </dependency>
-        <!-- For the UuidValueGenerator hook only; persistence itself belongs to the services. -->
+        <!-- Persistence primitives every service embeds: the UUIDv7 generator hook, the audited
+             entity base classes and the Money embeddable. The tables themselves belong to the
+             services. -->
         <dependency>
             <groupId>org.hibernate.orm</groupId>
             <artifactId>hibernate-core</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
             <scope>provided</scope>
         </dependency>
     </dependencies>

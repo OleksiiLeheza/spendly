@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigDecimal;
+import java.util.Currency;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -42,6 +43,38 @@ class MoneyTest {
     }
 
     @Nested
+    @DisplayName("scale rules")
+    class ScaleRules {
+
+        @ParameterizedTest(name = "{0} is booked at {1} decimal places")
+        @CsvSource({"USD, 2", "EUR, 2", "JPY, 0", "KRW, 0", "BHD, 3", "KWD, 3", "XAU, 0"})
+        void followsTheCurrencyFractionDigits(String code, int expectedScale) {
+            Currency currency = Currency.getInstance(code);
+            assertThat(Money.scaleOf(currency)).isEqualTo(expectedScale);
+            assertThat(Money.zero(currency).amount().scale()).isEqualTo(expectedScale);
+        }
+
+        @Test
+        void keepsThreeDecimalsForThreeDecimalCurrencies() {
+            assertThat(Money.of("1.2345", "BHD").amount()).isEqualTo(new BigDecimal("1.234"));
+            assertThat(Money.of("1.2355", "BHD").amount()).isEqualTo(new BigDecimal("1.236"));
+        }
+
+        @Test
+        void minorUnitsFollowTheCurrencyScale() {
+            assertThat(Money.ofMinor(1234, "BHD")).isEqualTo(Money.of("1.234", "BHD"));
+            assertThat(Money.of("1.234", "BHD").toMinorUnits()).isEqualTo(1234L);
+            assertThat(Money.of("1234", "JPY").toMinorUnits()).isEqualTo(1234L);
+        }
+
+        @Test
+        void allocatesWholeUnitsForZeroDecimalCurrencies() {
+            List<Money> shares = Money.of("100", "JPY").allocate(3);
+            assertThat(shares).containsExactly(Money.of("34", "JPY"), Money.of("33", "JPY"), Money.of("33", "JPY"));
+        }
+    }
+
+    @Nested
     @DisplayName("rounding policy")
     class Rounding {
 
@@ -56,6 +89,21 @@ class MoneyTest {
         })
         void usesBankersRounding(String input, String expected) {
             assertThat(Money.of(input, "USD").amount()).isEqualTo(new BigDecimal(expected));
+        }
+
+        @Test
+        void multiplicationRoundsHalfEvenToTheCurrencyScale() {
+            assertThat(Money.of("10.00", "USD").multipliedBy(new BigDecimal("0.0125")))
+                    .isEqualTo(Money.of("0.12", "USD"));
+            assertThat(Money.of("10.00", "USD").multipliedBy(new BigDecimal("0.0175")))
+                    .isEqualTo(Money.of("0.18", "USD"));
+        }
+
+        @Test
+        void divisionRoundsHalfEvenInsteadOfThrowingOnRepeatingDecimals() {
+            assertThat(Money.of("10.00", "USD").dividedBy(new BigDecimal("3"))).isEqualTo(Money.of("3.33", "USD"));
+            assertThat(Money.of("0.05", "USD").dividedBy(new BigDecimal("2"))).isEqualTo(Money.of("0.02", "USD"));
+            assertThat(Money.of("0.15", "USD").dividedBy(new BigDecimal("2"))).isEqualTo(Money.of("0.08", "USD"));
         }
 
         @Test

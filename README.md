@@ -13,9 +13,12 @@ spendly/
 ├── pom.xml              aggregator + shared parent (Boot 4.1.1, Java 25, JSpecify)
 ├── spendly-bom/         published BOM for consumers outside the monorepo
 ├── common/              ProblemDetail handling, CurrentUser resolver, correlation-id filter,
-│                        Money value object, UUIDv7 generator
+│                        Money value object (JPA embeddable), audited entity base classes,
+│                        UUIDv7 generator
 ├── events/              contract-only Kafka event schemas (no framework - enforced by ArchUnit)
 ├── user-service/        user profiles, Flyway migrations, OAuth2 resource server
+├── account-service/     accounts, ledger-derived balances, transfer-pair invariant
+├── docs/adr/            architecture decision records
 ├── web/                 Angular workspace (Material, ESLint, Prettier, Vitest, Playwright)
 └── infra/               Postgres init, Keycloak realm-as-code
 ```
@@ -29,6 +32,7 @@ cp .env.example .env         # adjust ports if something already uses 5432 etc.
 docker compose up -d         # Postgres, Keycloak, Redis, MinIO, Mailpit
 ./mvnw install -DskipTests
 ./mvnw -pl user-service spring-boot:run
+./mvnw -pl account-service spring-boot:run
 
 cd web && npm install && npm start
 ```
@@ -36,7 +40,8 @@ cd web && npm install && npm start
 | Service          | URL                            | Credentials             |
 | ---------------- | ------------------------------ | ----------------------- |
 | Angular app      | http://localhost:4200          | `dev@spendly.local`/`dev` |
-| user-service     | http://localhost:8081          | bearer token required   |
+| user-service     | http://localhost:8082          | bearer token required   |
+| account-service  | http://localhost:8083          | bearer token required   |
 | Keycloak console | http://localhost:8080          | `admin`/`admin`         |
 | MinIO console    | http://localhost:9001          | from `.env`             |
 | Mailpit          | http://localhost:8025          | –                       |

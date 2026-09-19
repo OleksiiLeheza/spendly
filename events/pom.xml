@@ -15,6 +15,6 @@
 
     <!--
       Deliberately dependency-free apart from JSpecify (inherited) and test scope.
-      SpringFreeContractTest enforces that; see FI-8.
+      ContractPurityTest enforces that; see FI-8.
     -->
 </project>

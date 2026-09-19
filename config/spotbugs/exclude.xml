@@ -13,7 +13,7 @@
       any endpoint starts accepting cookie authentication.
     -->
     <Match>
-        <Class name="com.spendly.userservice.config.SecurityConfig"/>
+        <Class name="~com\.spendly\.[a-z]+service\.config\.SecurityConfig"/>
         <Bug pattern="SPRING_CSRF_PROTECTION_DISABLED"/>
     </Match>
 
@@ -23,9 +23,32 @@
       throwing. SpotBugs cannot see through the helper method that does the unwrapping.
     -->
     <Match>
-        <Class name="com.spendly.userservice.domain.common.BaseEntity"/>
+        <Class name="com.spendly.common.persistence.BaseEntity"/>
         <Method name="equals"/>
         <Bug pattern="BC_EQUALS_METHOD_SHOULD_WORK_FOR_ALL_OBJECTS"/>
+    </Match>
+
+    <!--
+      A domain aggregate hands out references to its own entities on purpose: a Posting
+      exposes the Account it belongs to, and TransferLegs is the pair of Postings the
+      invariant was checked on. JPA-managed entities are mutable by definition; what governs
+      their mutation is the service-method transaction boundary (CLAUDE.md 6.15), not a
+      defensive copy that Hibernate would not track anyway.
+    -->
+    <Match>
+        <Package name="~com\.spendly\.[a-z]+service\.domain"/>
+        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
+    </Match>
+
+    <!--
+      The reconciliation warning logs an account UUID and two Money values. UUID.toString and
+      Money.toString (ISO code + plain decimal) cannot carry a CRLF, and deployed profiles emit
+      JSON logs where the encoder escapes control characters regardless (CLAUDE.md 11).
+    -->
+    <Match>
+        <Class name="com.spendly.accountservice.service.AccountService"/>
+        <Method name="reconcile"/>
+        <Bug pattern="CRLF_INJECTION_LOGS"/>
     </Match>
 
 </FindBugsFilter>

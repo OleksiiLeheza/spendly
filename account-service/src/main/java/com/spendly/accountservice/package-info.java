@@ -1,4 +1,4 @@
 @NullMarked
-package com.spendly.userservice.domain.common;
+package com.spendly.accountservice;
 
 import org.jspecify.annotations.NullMarked;

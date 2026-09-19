@@ -1,4 +1,4 @@
-package com.spendly.userservice.domain.common;
+package com.spendly.common.persistence;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.EntityListeners;
@@ -6,8 +6,6 @@ import jakarta.persistence.MappedSuperclass;
 import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
-import lombok.Getter;
-import lombok.Setter;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.annotation.CreatedBy;
 import org.springframework.data.annotation.CreatedDate;
@@ -15,8 +13,6 @@ import org.springframework.data.annotation.LastModifiedBy;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-@Getter
-@Setter
 @MappedSuperclass
 @EntityListeners(AuditingEntityListener.class)
 public abstract class BaseEntityAudit extends BaseEntity {
@@ -43,6 +39,34 @@ public abstract class BaseEntityAudit extends BaseEntity {
 
     @Column(name = "deleted_at")
     private @Nullable Instant deletedAt;
+
+    public long getVersion() {
+        return version;
+    }
+
+    public @Nullable UUID getCreatedBy() {
+        return createdBy;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    public @Nullable UUID getLastModifiedBy() {
+        return lastModifiedBy;
+    }
+
+    public Instant getLastModifiedAt() {
+        return lastModifiedAt;
+    }
+
+    public @Nullable Instant getDeletedAt() {
+        return deletedAt;
+    }
+
+    public void setDeletedAt(@Nullable Instant deletedAt) {
+        this.deletedAt = deletedAt;
+    }
 
     public boolean isDeleted() {
         return deletedAt != null;
