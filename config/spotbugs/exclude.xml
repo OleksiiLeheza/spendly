@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Every entry here is a deliberate exception with a stated reason. An exclusion without a
+  justification is a bug that was hidden rather than fixed.
+-->
+<FindBugsFilter>
+
+    <!--
+      CSRF protection is disabled on purpose. The API is stateless and token-based: the
+      browser holds the access token in memory and sends it in an Authorization header
+      (CLAUDE.md 8). There is no cookie or other ambient credential for a cross-site request
+      to ride on, which is the only thing CSRF tokens defend against. Re-enable this the day
+      any endpoint starts accepting cookie authentication.
+    -->
+    <Match>
+        <Class name="com.spendly.userservice.config.SecurityConfig"/>
+        <Bug pattern="SPRING_CSRF_PROTECTION_DISABLED"/>
+    </Match>
+
+    <!--
+      BaseEntity.equals resolves the Hibernate proxy's persistent class on both sides and
+      compares those before casting, so a foreign argument returns false rather than
+      throwing. SpotBugs cannot see through the helper method that does the unwrapping.
+    -->
+    <Match>
+        <Class name="com.spendly.userservice.domain.common.BaseEntity"/>
+        <Method name="equals"/>
+        <Bug pattern="BC_EQUALS_METHOD_SHOULD_WORK_FOR_ALL_OBJECTS"/>
+    </Match>
+
+</FindBugsFilter>

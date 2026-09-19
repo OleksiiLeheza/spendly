@@ -16,15 +16,10 @@ pom.xml.next
 buildNumber.properties
 
 ### Maven wrapper ###
-# wrapperVersion 3.3.4 uses distributionType=only-script, so no jar is checked in
+# The wrapper scripts and properties ARE committed - without them a clean clone
+# cannot reproduce the build (CLAUDE.md 13.9). Only the downloaded jar is ignored.
 .mvn/wrapper/maven-wrapper.jar
 .mvn/timing.properties
-mvnw
-mvnw.cmd
-.mvn/wrapper/maven-wrapper.properties
-
-### Git metadata ###
-.gitattributes
 
 ### Gradle (in case a module switches) ###
 .gradle/
@@ -113,5 +108,7 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 
-### Spring Initializr leftovers ###
-HELP.md
+### AI assistant context ###
+CLAUDE.md
+# Personal Claude Code hooks/permissions; .claude/settings.json stays committable
+.claude/settings.local.json

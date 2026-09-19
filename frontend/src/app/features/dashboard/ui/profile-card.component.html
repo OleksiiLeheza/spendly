@@ -1,0 +1,37 @@
+<mat-card appearance="outlined">
+  <mat-card-header>
+    <mat-card-title>Signed in as {{ profile().displayName }}</mat-card-title>
+    <mat-card-subtitle>{{ profile().email }}</mat-card-subtitle>
+  </mat-card-header>
+
+  <mat-card-content>
+    <mat-list>
+      <mat-list-item>
+        <span matListItemTitle>Profile id</span>
+        <span matListItemLine>{{ profile().id }}</span>
+      </mat-list-item>
+      <mat-list-item>
+        <span matListItemTitle>Default currency</span>
+        <span matListItemLine>{{ profile().defaultCurrency }}</span>
+      </mat-list-item>
+      <mat-list-item>
+        <span matListItemTitle>Signed up via</span>
+        <span matListItemLine>{{ profile().identityProvider ?? 'email and password' }}</span>
+      </mat-list-item>
+      <mat-list-item>
+        <span matListItemTitle>Created</span>
+        <span matListItemLine>{{ profile().createdAt | date: 'medium' }}</span>
+      </mat-list-item>
+      <mat-list-item>
+        <span matListItemTitle>Roles</span>
+        <span matListItemLine>
+          <span class="chips">
+            @for (role of profile().roles; track role) {
+              <mat-chip>{{ role }}</mat-chip>
+            }
+          </span>
+        </span>
+      </mat-list-item>
+    </mat-list>
+  </mat-card-content>
+</mat-card>

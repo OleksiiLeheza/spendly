@@ -1,0 +1,29 @@
+<div class="page">
+  @if (store.loading()) {
+    <mat-progress-bar mode="indeterminate" aria-label="Loading your profile" />
+  } @else if (store.error(); as message) {
+    <mat-card appearance="outlined">
+      <mat-card-header>
+        <mat-card-title>Could not load your profile</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>{{ message }}</mat-card-content>
+      <mat-card-actions>
+        <button matButton="filled" type="button" (click)="retry()">Try again</button>
+      </mat-card-actions>
+    </mat-card>
+  } @else if (view(); as profile) {
+    <app-profile-card [profile]="profile" />
+  } @else {
+    <mat-card appearance="outlined">
+      <mat-card-header>
+        <mat-card-title>Nothing here yet</mat-card-title>
+      </mat-card-header>
+      <mat-card-content
+        >Your profile has not been created. Reload to provision it.</mat-card-content
+      >
+      <mat-card-actions>
+        <button matButton="filled" type="button" (click)="retry()">Load profile</button>
+      </mat-card-actions>
+    </mat-card>
+  }
+</div>

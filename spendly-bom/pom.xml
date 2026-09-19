@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.spendly</groupId>
+    <artifactId>spendly</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>spendly-bom</artifactId>
+  <packaging>pom</packaging>
+  <name>spendly-bom</name>
+  <description>Published BOM: import this to consume Spendly modules at a consistent version</description>
+
+  <!--
+      Consumed from OUTSIDE the reactor. Modules inside the monorepo inherit their
+      versions from the root parent instead, so nothing here is imported by a sibling
+      (an import-scoped BOM that is also a reactor module resolves unreliably).
+    -->
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>com.spendly</groupId>
+        <artifactId>common</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.spendly</groupId>
+        <artifactId>events</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+</project>
