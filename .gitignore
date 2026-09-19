@@ -19,6 +19,12 @@ buildNumber.properties
 # wrapperVersion 3.3.4 uses distributionType=only-script, so no jar is checked in
 .mvn/wrapper/maven-wrapper.jar
 .mvn/timing.properties
+mvnw
+mvnw.cmd
+.mvn/wrapper/maven-wrapper.properties
+
+### Git metadata ###
+.gitattributes
 
 ### Gradle (in case a module switches) ###
 .gradle/
