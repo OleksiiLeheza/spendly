@@ -1,0 +1,111 @@
+### Maven / build output ###
+# No leading slash: also catches module builds like user-service/target/
+target/
+build/
+!**/src/main/**/target/
+!**/src/test/**/target/
+!**/src/main/**/build/
+!**/src/test/**/build/
+dependency-reduced-pom.xml
+.flattened-pom.xml
+release.properties
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+buildNumber.properties
+
+### Maven wrapper ###
+# wrapperVersion 3.3.4 uses distributionType=only-script, so no jar is checked in
+.mvn/wrapper/maven-wrapper.jar
+.mvn/timing.properties
+
+### Gradle (in case a module switches) ###
+.gradle/
+gradle-app.setting
+!gradle-wrapper.jar
+
+### Compiled / packaged artifacts ###
+*.class
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+*.ctxt
+.mtj.tmp/
+
+### JVM crash + runtime files ###
+hs_err_pid*
+replay_pid*
+*.hprof
+*.pid
+*.pid.lock
+
+### Logs ###
+*.log
+logs/
+log/
+
+### Local config & secrets ###
+# Keep committed profiles; ignore machine-local overrides
+.env
+.env.*
+!.env.example
+**/application-local.yml
+**/application-local.yaml
+**/application-local.properties
+**/application-secrets.yml
+**/application-secrets.yaml
+**/application-secrets.properties
+*.pem
+*.key
+*.p12
+*.jks
+*.keystore
+
+### Spring Boot ###
+.springBeans
+spring-shell.log
+
+### IntelliJ IDEA ###
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+### Eclipse / STS ###
+.apt_generated/
+.apt_generated_test/
+.classpath
+.factorypath
+.project
+.settings/
+.sts4-cache/
+bin/
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+### VS Code ###
+.vscode/
+
+### OS noise ###
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+### Spring Initializr leftovers ###
+HELP.md

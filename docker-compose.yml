@@ -1,0 +1,5 @@
+services:
+  user-service:
+    image: user-service:latest
+    ports:
+      - 8081:8081
