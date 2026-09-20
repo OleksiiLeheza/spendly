@@ -9,6 +9,10 @@ const API = process.env['E2E_API_URL'] ?? 'http://localhost:8082';
  * <p>Needs the Docker stack and user-service running, so it skips itself otherwise.
  */
 test.describe('signing in with email and password', () => {
+  // Both journeys sign in as the same seeded user; run them one after another so two
+  // simultaneous logins never race each other in Keycloak's session handling.
+  test.describe.configure({ mode: 'serial' });
+
   test.beforeEach(async () => {
     const [kc, api] = await Promise.all([
       fetch(`${KEYCLOAK}/realms/spendly/.well-known/openid-configuration`)
@@ -26,6 +30,7 @@ test.describe('signing in with email and password', () => {
     await page.getByRole('button', { name: 'Sign in with email' }).click();
 
     await page.waitForURL(/\/realms\/spendly\/protocol\/openid-connect\/auth/);
+    await page.locator('#kc-form-login').waitFor();
     await page.locator('#username').fill('dev@spendly.local');
     await page.locator('#password').fill('dev');
     await page.locator('#kc-login').click();
@@ -37,10 +42,9 @@ test.describe('signing in with email and password', () => {
     // A rendered profile id proves the API call succeeded with a real bearer token, not
     // merely that the redirect finished. It must also be the time-ordered UUIDv7 the
     // backend generates - the version nibble is the '7' opening the third group.
-    const profileId = page.getByRole('definition').filter({ has: page.locator('code') });
-    await expect(profileId).toHaveText(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
-    );
+    await expect(
+      page.getByText(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/),
+    ).toBeVisible();
 
     await expect(page.getByText('Default currency')).toBeVisible();
     await expect(page.locator('mat-chip').filter({ hasText: 'USER' })).toBeVisible();
@@ -50,6 +54,7 @@ test.describe('signing in with email and password', () => {
     await page.goto('/login');
     await page.getByRole('button', { name: 'Sign in with email' }).click();
     await page.waitForURL(/\/realms\/spendly/);
+    await page.locator('#kc-form-login').waitFor();
     await page.locator('#username').fill('dev@spendly.local');
     await page.locator('#password').fill('dev');
     await page.locator('#kc-login').click();

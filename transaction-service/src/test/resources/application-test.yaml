@@ -1,0 +1,21 @@
+# Testcontainers supplies the datasource via @ServiceConnection, so no URL here.
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Never reached: these tests do not perform a real login, but the resource-server
+          # auto-configuration still needs an issuer to start.
+          issuer-uri: http://localhost:8080/realms/spendly
+
+spendly:
+  cors:
+    allowed-origins: http://localhost:4200
+
+logging:
+  level:
+    org.testcontainers: WARN
+    com.github.dockerjava: WARN

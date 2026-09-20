@@ -22,16 +22,12 @@
         <span matListItemTitle>Created</span>
         <span matListItemLine>{{ profile().createdAt | date: 'medium' }}</span>
       </mat-list-item>
-      <mat-list-item>
-        <span matListItemTitle>Roles</span>
-        <span matListItemLine>
-          <span class="chips">
-            @for (role of profile().roles; track role) {
-              <mat-chip>{{ role }}</mat-chip>
-            }
-          </span>
-        </span>
-      </mat-list-item>
     </mat-list>
+
+    <mat-chip-set aria-label="Roles">
+      @for (role of profile().roles; track role) {
+        <mat-chip>{{ role }}</mat-chip>
+      }
+    </mat-chip-set>
   </mat-card-content>
 </mat-card>

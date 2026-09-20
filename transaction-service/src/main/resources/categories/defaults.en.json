@@ -1,0 +1,56 @@
+[
+  {"key": "income", "name": "Income", "kind": "INCOME", "icon": "payments", "children": [
+    {"key": "income.salary", "name": "Salary"},
+    {"key": "income.freelance", "name": "Freelance"},
+    {"key": "income.gifts", "name": "Gifts received"},
+    {"key": "income.refunds", "name": "Refunds"},
+    {"key": "income.other", "name": "Other income"}
+  ]},
+  {"key": "food", "name": "Food & drink", "kind": "EXPENSE", "icon": "restaurant", "children": [
+    {"key": "food.groceries", "name": "Groceries"},
+    {"key": "food.restaurants", "name": "Restaurants & cafés"},
+    {"key": "food.delivery", "name": "Delivery"}
+  ]},
+  {"key": "housing", "name": "Housing", "kind": "EXPENSE", "icon": "home", "children": [
+    {"key": "housing.rent", "name": "Rent"},
+    {"key": "housing.utilities", "name": "Utilities"},
+    {"key": "housing.internet", "name": "Internet & phone"},
+    {"key": "housing.repairs", "name": "Repairs"}
+  ]},
+  {"key": "transport", "name": "Transport", "kind": "EXPENSE", "icon": "directions_bus", "children": [
+    {"key": "transport.public", "name": "Public transport"},
+    {"key": "transport.taxi", "name": "Taxi"},
+    {"key": "transport.fuel", "name": "Fuel"},
+    {"key": "transport.car", "name": "Car maintenance"}
+  ]},
+  {"key": "health", "name": "Health", "kind": "EXPENSE", "icon": "favorite", "children": [
+    {"key": "health.pharmacy", "name": "Pharmacy"},
+    {"key": "health.doctor", "name": "Doctor"},
+    {"key": "health.fitness", "name": "Fitness"}
+  ]},
+  {"key": "shopping", "name": "Shopping", "kind": "EXPENSE", "icon": "shopping_bag", "children": [
+    {"key": "shopping.clothes", "name": "Clothes"},
+    {"key": "shopping.electronics", "name": "Electronics"},
+    {"key": "shopping.home", "name": "Home & garden"}
+  ]},
+  {"key": "leisure", "name": "Leisure", "kind": "EXPENSE", "icon": "movie", "children": [
+    {"key": "leisure.entertainment", "name": "Entertainment"},
+    {"key": "leisure.subscriptions", "name": "Subscriptions"},
+    {"key": "leisure.travel", "name": "Travel"},
+    {"key": "leisure.hobbies", "name": "Hobbies"}
+  ]},
+  {"key": "education", "name": "Education", "kind": "EXPENSE", "icon": "school", "children": [
+    {"key": "education.courses", "name": "Courses"},
+    {"key": "education.books", "name": "Books"}
+  ]},
+  {"key": "personal", "name": "Personal", "kind": "EXPENSE", "icon": "person", "children": [
+    {"key": "personal.beauty", "name": "Beauty"},
+    {"key": "personal.gifts", "name": "Gifts given"},
+    {"key": "personal.pets", "name": "Pets"}
+  ]},
+  {"key": "finance", "name": "Finance", "kind": "EXPENSE", "icon": "account_balance", "children": [
+    {"key": "finance.fees", "name": "Fees & charges"},
+    {"key": "finance.taxes", "name": "Taxes"},
+    {"key": "finance.insurance", "name": "Insurance"}
+  ]}
+]

@@ -6,7 +6,7 @@
  */
 export const environment = {
   production: false,
-  apiBaseUrl: 'http://localhost:8081',
+  apiBaseUrl: 'http://localhost:8082',
   auth: {
     authority: 'http://localhost:8080/realms/spendly',
     clientId: 'spendly-web',

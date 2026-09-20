@@ -18,8 +18,9 @@ spendly/
 ├── events/              contract-only Kafka event schemas (no framework - enforced by ArchUnit)
 ├── user-service/        user profiles, Flyway migrations, OAuth2 resource server
 ├── account-service/     accounts, ledger-derived balances, transfer-pair invariant
+├── transaction-service/ the append-only ledger (partitioned), splits, categories, feed with keyset paging + full-text
 ├── docs/adr/            architecture decision records
-├── web/                 Angular workspace (Material, ESLint, Prettier, Vitest, Playwright)
+├── frontend/            Angular: Material, SignalStore, generated API client, boundaries lint, Playwright
 └── infra/               Postgres init, Keycloak realm-as-code
 ```
 
@@ -29,22 +30,27 @@ Prerequisites: Docker, JDK 25, Node 22+.
 
 ```bash
 cp .env.example .env         # adjust ports if something already uses 5432 etc.
-docker compose up -d         # Postgres, Keycloak, Redis, MinIO, Mailpit
+docker compose up -d         # Postgres, Keycloak, Redis, MinIO, Mailpit, Kafka, observability
 ./mvnw install -DskipTests
+set -a && . ./.env && set +a # services read their datasource from the environment
 ./mvnw -pl user-service spring-boot:run
 ./mvnw -pl account-service spring-boot:run
+./mvnw -pl transaction-service spring-boot:run
 
-cd web && npm install && npm start
+cd frontend && npm install && npm start
 ```
 
 | Service          | URL                            | Credentials             |
 | ---------------- | ------------------------------ | ----------------------- |
 | Angular app      | http://localhost:4200          | `dev@spendly.local`/`dev` |
-| user-service     | http://localhost:8082          | bearer token required   |
+| user-service     | http://localhost:8082          | bearer token; Swagger UI `/swagger-ui.html`; actuator 9091 |
 | account-service  | http://localhost:8083          | bearer token required   |
+| transaction-service | http://localhost:8084       | bearer token required   |
 | Keycloak console | http://localhost:8080          | `admin`/`admin`         |
 | MinIO console    | http://localhost:9001          | from `.env`             |
 | Mailpit          | http://localhost:8025          | –                       |
+| Kafka UI         | http://localhost:8099          | –                       |
+| Grafana          | http://localhost:3000          | `admin`/`admin`         |
 
 Two realm users are seeded: `dev@spendly.local`/`dev` (USER) and
 `admin@spendly.local`/`admin` (USER + ADMIN).
@@ -87,15 +93,17 @@ A GitHub provider is present but disabled, as a template for adding more.
 ## Testing
 
 ```bash
-./mvnw test                  # JUnit + ArchUnit + Testcontainers (needs Docker)
-cd web
-npm test                     # Vitest unit tests
-npm run lint
-npm run e2e                  # Playwright; needs the stack running for the login specs
+./mvnw verify                # the gate: Spotless, Error Prone + NullAway, SpotBugs, Modernizer,
+                             # enforcer, JaCoCo report, ArchUnit, Testcontainers (needs Docker)
+./mvnw spotless:apply        # before verify, so it fails on defects rather than formatting
+cd frontend
+npm run lint                 # angular-eslint + boundaries
+npm run e2e                  # Playwright; login specs skip themselves if the stack is down
 ```
 
-The Playwright login specs skip themselves when Keycloak or user-service is unreachable, so a
-machine that only wants unit tests is not forced to run Docker.
+No unit tests are written in this project (see `CLAUDE.md` §5.4.1); integration tests over
+the real stack carry the weight. `ConcurrentProvisioningTest` is the shape to copy.
+
 
 ## Conventions
 

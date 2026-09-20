@@ -9,6 +9,8 @@ import java.util.TreeMap;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.MessageSourceResolvable;
+import org.springframework.core.MethodParameter;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -16,11 +18,14 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.validation.FieldError;
+import org.springframework.validation.method.ParameterValidationResult;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
@@ -108,23 +113,56 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         Map<String, String> errors = new TreeMap<>();
         ex.getBindingResult()
                 .getFieldErrors()
-                .forEach(error -> errors.merge(
-                        error.getField(),
-                        error.getDefaultMessage() == null ? "is invalid" : error.getDefaultMessage(),
+                .forEach(error -> errors.merge(error.getField(), messageOf(error),
                         (first, second) -> first + "; " + second));
         ex.getBindingResult()
                 .getGlobalErrors()
-                .forEach(error -> errors.putIfAbsent(
-                        error.getObjectName(),
-                        error.getDefaultMessage() == null ? "is invalid" : error.getDefaultMessage()));
+                .forEach(error -> errors.putIfAbsent(error.getObjectName(), messageOf(error)));
 
+        return validationProblem(errors, request);
+    }
+
+    /**
+     * Raised instead of {@link MethodArgumentNotValidException} as soon as any parameter of the handler carries a
+     * constraint (Spring 6.1+ method validation). Reported in the same {@code errors} shape, keyed by field for a body
+     * and by parameter name for a header, path or query value.
+     */
+    @Override
+    protected ResponseEntity<Object> handleHandlerMethodValidationException(
+            HandlerMethodValidationException ex,
+            HttpHeaders headers,
+            HttpStatusCode status,
+            WebRequest request) {
+
+        Map<String, String> errors = new TreeMap<>();
+        for (ParameterValidationResult result : ex.getParameterValidationResults()) {
+            for (MessageSourceResolvable error : result.getResolvableErrors()) {
+                String key = error instanceof FieldError fieldError
+                        ? fieldError.getField()
+                        : parameterName(result.getMethodParameter());
+                errors.merge(key, messageOf(error), (first, second) -> first + "; " + second);
+            }
+        }
+        return validationProblem(errors, request);
+    }
+
+    private static ResponseEntity<Object> validationProblem(Map<String, String> errors, WebRequest request) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Request validation failed");
         problem.setType(VALIDATION_TYPE);
         problem.setTitle("Validation failed");
         problem.setProperty("errors", errors);
         decorate(problem, servletRequestOf(request));
-
         return ResponseEntity.badRequest().body(problem);
+    }
+
+    private static String messageOf(MessageSourceResolvable error) {
+        String message = error.getDefaultMessage();
+        return message == null ? "is invalid" : message;
+    }
+
+    private static String parameterName(MethodParameter parameter) {
+        String name = parameter.getParameterName();
+        return name == null ? "argument" + parameter.getParameterIndex() : name;
     }
 
     @Override

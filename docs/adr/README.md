@@ -10,3 +10,5 @@ Backlog tickets reference records as `ADR-NNNN`.
 | ADR | Title | Status |
 |---|---|---|
 | [0001](0001-monorepo-money-uuidv7.md) | Maven monorepo, BigDecimal money, UUIDv7 identifiers | Accepted |
+| [0002](0002-postgres-over-mysql.md) | PostgreSQL over MySQL | Accepted |
+| [0003](0003-cursor-pagination.md) | Cursor (keyset) pagination for the transaction feed | Accepted |

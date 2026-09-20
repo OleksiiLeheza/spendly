@@ -11,6 +11,7 @@ encoder.ts
 git_push.sh
 index.ts
 model/models.ts
+model/problem-detail.ts
 model/update-profile-request.ts
 model/user-response.ts
 param.ts

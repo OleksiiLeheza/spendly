@@ -65,15 +65,17 @@ class LayeringTest {
     }
 
     @Test
-    void publicServiceMethodsCarryATransactionBoundary() {
-        ArchRule rule = ArchRuleDefinition.classes()
+    void anythingThatTouchesARepositoryOwnsATransactionBoundary() {
+        ArchRule rule = ArchRuleDefinition.noClasses()
                 .that()
                 .resideInAPackage("com.spendly.userservice.service..")
                 .and()
-                .areAnnotatedWith(org.springframework.stereotype.Service.class)
+                .areNotAnnotatedWith(org.springframework.transaction.annotation.Transactional.class)
                 .should()
-                .beAnnotatedWith(org.springframework.transaction.annotation.Transactional.class)
-                .because("a service method without a transaction commits per repository call (CLAUDE.md 6.15)");
+                .dependOnClassesThat()
+                .resideInAPackage("com.spendly.userservice.repository..")
+                .because("a repository call outside a declared boundary commits on its own (CLAUDE.md 6.15); "
+                        + "an orchestrator that must not hold a connection stays out of the repository instead");
 
         rule.check(CLASSES);
     }

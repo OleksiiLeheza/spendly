@@ -1,0 +1,56 @@
+[
+  {"key": "income", "name": "Доходи", "kind": "INCOME", "icon": "payments", "children": [
+    {"key": "income.salary", "name": "Зарплата"},
+    {"key": "income.freelance", "name": "Фриланс"},
+    {"key": "income.gifts", "name": "Отримані подарунки"},
+    {"key": "income.refunds", "name": "Повернення"},
+    {"key": "income.other", "name": "Інші доходи"}
+  ]},
+  {"key": "food", "name": "Їжа та напої", "kind": "EXPENSE", "icon": "restaurant", "children": [
+    {"key": "food.groceries", "name": "Продукти"},
+    {"key": "food.restaurants", "name": "Ресторани та кав'ярні"},
+    {"key": "food.delivery", "name": "Доставка"}
+  ]},
+  {"key": "housing", "name": "Житло", "kind": "EXPENSE", "icon": "home", "children": [
+    {"key": "housing.rent", "name": "Оренда"},
+    {"key": "housing.utilities", "name": "Комунальні послуги"},
+    {"key": "housing.internet", "name": "Інтернет і зв'язок"},
+    {"key": "housing.repairs", "name": "Ремонт"}
+  ]},
+  {"key": "transport", "name": "Транспорт", "kind": "EXPENSE", "icon": "directions_bus", "children": [
+    {"key": "transport.public", "name": "Громадський транспорт"},
+    {"key": "transport.taxi", "name": "Таксі"},
+    {"key": "transport.fuel", "name": "Пальне"},
+    {"key": "transport.car", "name": "Обслуговування авто"}
+  ]},
+  {"key": "health", "name": "Здоров'я", "kind": "EXPENSE", "icon": "favorite", "children": [
+    {"key": "health.pharmacy", "name": "Аптека"},
+    {"key": "health.doctor", "name": "Лікар"},
+    {"key": "health.fitness", "name": "Спорт"}
+  ]},
+  {"key": "shopping", "name": "Покупки", "kind": "EXPENSE", "icon": "shopping_bag", "children": [
+    {"key": "shopping.clothes", "name": "Одяг"},
+    {"key": "shopping.electronics", "name": "Електроніка"},
+    {"key": "shopping.home", "name": "Дім і сад"}
+  ]},
+  {"key": "leisure", "name": "Дозвілля", "kind": "EXPENSE", "icon": "movie", "children": [
+    {"key": "leisure.entertainment", "name": "Розваги"},
+    {"key": "leisure.subscriptions", "name": "Підписки"},
+    {"key": "leisure.travel", "name": "Подорожі"},
+    {"key": "leisure.hobbies", "name": "Хобі"}
+  ]},
+  {"key": "education", "name": "Освіта", "kind": "EXPENSE", "icon": "school", "children": [
+    {"key": "education.courses", "name": "Курси"},
+    {"key": "education.books", "name": "Книги"}
+  ]},
+  {"key": "personal", "name": "Особисте", "kind": "EXPENSE", "icon": "person", "children": [
+    {"key": "personal.beauty", "name": "Краса"},
+    {"key": "personal.gifts", "name": "Подарунки"},
+    {"key": "personal.pets", "name": "Улюбленці"}
+  ]},
+  {"key": "finance", "name": "Фінанси", "kind": "EXPENSE", "icon": "account_balance", "children": [
+    {"key": "finance.fees", "name": "Комісії та збори"},
+    {"key": "finance.taxes", "name": "Податки"},
+    {"key": "finance.insurance", "name": "Страхування"}
+  ]}
+]

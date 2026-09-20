@@ -13,9 +13,6 @@ import org.springframework.context.annotation.Configuration;
 public class OpenApiConfig {
 
     static {
-        // @CurrentUser is resolved from the access token, not from the request, so springdoc
-        // must not publish it as a parameter - otherwise every generated client demands a
-        // principal argument the caller cannot supply.
         SpringDocUtils.getConfig().addAnnotationsToIgnore(CurrentUser.class);
     }
 

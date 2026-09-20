@@ -41,6 +41,58 @@
     </Match>
 
     <!--
+      Request and response records in api.dto are transport values. Jackson builds a fresh
+      List for every request body and MapStruct builds a fresh one for every response, and
+      nothing holds a reference afterwards, so a defensive copy would copy a list nobody
+      else can reach. Service-level result records (PostedTransaction) hand back the entity
+      the transaction just produced for the same reason as the domain exclusion above.
+    -->
+    <Match>
+        <Or>
+            <Package name="~com\.spendly\.[a-z]+service\.api\.dto"/>
+            <Class name="com.spendly.transactionservice.service.PostedTransaction"/>
+        </Or>
+        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
+    </Match>
+
+    <!--
+      Constructor injection stores the container-managed ObjectMapper; it is shared by
+      design and never mutated here.
+    -->
+    <Match>
+        <Class name="com.spendly.transactionservice.service.CategorySeeds"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+
+    <!--
+      These log lines carry UUIDs and a language code already normalised to "en" or "uk";
+      neither can contain a CRLF, and deployed profiles emit JSON logs (CLAUDE.md 11).
+    -->
+    <Match>
+        <Or>
+            <And>
+                <Class name="com.spendly.transactionservice.service.CategoryService"/>
+                <Method name="merge"/>
+            </And>
+            <And>
+                <Class name="com.spendly.transactionservice.service.CategorySeeder"/>
+                <Method name="seed"/>
+            </And>
+        </Or>
+        <Bug pattern="CRLF_INJECTION_LOGS"/>
+    </Match>
+
+    <!--
+      Partition DDL has to interpolate the table name: PostgreSQL does not accept a bind
+      parameter there. The name is built from a YearMonth's two integers by a fixed format
+      string, so no caller-supplied text ever reaches the statement.
+    -->
+    <Match>
+        <Class name="com.spendly.transactionservice.repository.TransactionPartitions"/>
+        <Bug pattern="SQL_INJECTION_SPRING_JDBC,SQL_NONCONSTANT_STRING_PASSED_TO_EXECUTE,SQL_INJECTION_JDBC"/>
+    </Match>
+
+    <!--
       The reconciliation warning logs an account UUID and two Money values. UUID.toString and
       Money.toString (ISO code + plain decimal) cannot carry a CRLF, and deployed profiles emit
       JSON logs where the encoder escapes control characters regardless (CLAUDE.md 11).
@@ -49,6 +101,26 @@
         <Class name="com.spendly.accountservice.service.AccountService"/>
         <Method name="reconcile"/>
         <Bug pattern="CRLF_INJECTION_LOGS"/>
+    </Match>
+
+    <!--
+      EI_EXPOSE_REP / EI_EXPOSE_REP2 warn about handing out or storing a mutable object without
+      a defensive copy. That is sound advice for value objects and is irrelevant to Spring
+      beans: a constructor-injected collaborator (CLAUDE.md 12, constructor injection only) is
+      a shared singleton by design, and copying it would be a bug. Value objects in this code
+      base are records, which the detector does not flag.
+    -->
+    <Match>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+        </Or>
+        <Or>
+            <Package name="~com\.spendly\..*\.service"/>
+            <Package name="~com\.spendly\..*\.api"/>
+            <Package name="~com\.spendly\..*\.config"/>
+            <Package name="~com\.spendly\.common\.autoconfigure"/>
+        </Or>
     </Match>
 
 </FindBugsFilter>
