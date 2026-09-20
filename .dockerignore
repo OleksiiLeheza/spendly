@@ -1,0 +1,16 @@
+# Build context for the root Dockerfile (Spring services). Only the Maven reactor goes in.
+.git
+.idea
+.claude
+.env
+.env.*
+**/target
+**/.DS_Store
+frontend
+docs
+*.md
+docker-compose.yml
+Dockerfile
+mvnw
+mvnw.cmd
+HELP.md

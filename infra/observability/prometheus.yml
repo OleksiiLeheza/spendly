@@ -7,12 +7,30 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:9090']
 
-  # Services run on the host during development, not in compose, so Prometheus reaches
-  # them through the Docker host gateway rather than a compose service name.
+  # The services run in compose and are scraped by service name on their management port
+  # (CLAUDE.md 6.14).
   - job_name: spendly-services
     metrics_path: /actuator/prometheus
     static_configs:
       - targets:
-          - 'host.docker.internal:9091'   # user-service management port
+          - 'user-service:9091'
+          - 'account-service:9083'
+          - 'transaction-service:9084'
         labels:
           stack: spendly
+
+  # A service started from the IDE instead (docker compose stop <service> first) listens on
+  # the same management port on the host. Docker Desktop routes host.docker.internal to the
+  # host's loopback, where the containers' management ports are also published, so this job
+  # is off by default: enabled alongside the one above it would scrape every container
+  # twice. Uncomment it while a service runs from the IDE, then `docker compose restart
+  # prometheus`.
+  #
+  # - job_name: spendly-services-host
+  #   metrics_path: /actuator/prometheus
+  #   static_configs:
+  #     - targets:
+  #         - 'host.docker.internal:9091'
+  #       labels:
+  #         stack: spendly
+  #         runtime: host

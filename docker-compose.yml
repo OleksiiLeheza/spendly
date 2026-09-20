@@ -1,11 +1,42 @@
-# Spendly local development stack (FI-9).
+# Spendly local stack (FI-9): infrastructure plus the application itself.
 #
 #   cp .env.example .env && docker compose up -d
 #
 # Every service has a healthcheck and the dependants wait on it, so a single
-# `docker compose up -d` reaches a usable state without manual retries.
+# `docker compose up -d` reaches a usable state without manual retries. The first run builds
+# the service and frontend images from source; after a code change, `docker compose up -d
+# --build` rebuilds them. To run one service from the IDE instead, free its port first:
+# `docker compose stop user-service`.
 
 name: spendly
+
+# Shared shape of every Spring Boot service container. A service adds its datasource URL,
+# its ports and MANAGEMENT_PORT, which the healthcheck reads at runtime ($$ keeps the
+# expansion out of compose's hands).
+x-spring-service: &spring-service
+  restart: unless-stopped
+  depends_on:
+    postgres:
+      condition: service_healthy
+    keycloak:
+      condition: service_healthy
+  healthcheck:
+    test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:$${MANAGEMENT_PORT}/actuator/health/readiness"]
+    interval: 10s
+    timeout: 5s
+    retries: 12
+    start_period: 40s
+
+x-spring-environment: &spring-environment
+  SPENDLY_DB_USER: ${POSTGRES_USER:-spendly}
+  SPENDLY_DB_PASSWORD: ${POSTGRES_PASSWORD:-spendly}
+  # Tokens are minted for the browser, so their `iss` is the host-facing Keycloak URL (pinned
+  # by KC_HOSTNAME below). A container cannot reach localhost:8080, so the signing keys come
+  # from the compose network name instead; see spring.security.oauth2 in application.yaml.
+  SPENDLY_OIDC_ISSUER: ${SPENDLY_OIDC_ISSUER:-http://localhost:8080/realms/spendly}
+  SPENDLY_OIDC_JWK_SET_URI: http://keycloak:8080/realms/spendly/protocol/openid-connect/certs
+  SPENDLY_OTLP_ENDPOINT: http://tempo:4318/v1/traces
+  SPENDLY_CORS_ORIGINS: ${SPENDLY_CORS_ORIGINS:-http://localhost:4200}
 
 services:
   postgres:
@@ -42,6 +73,9 @@ services:
       KC_DB_PASSWORD: ${POSTGRES_PASSWORD:-spendly}
       KC_HEALTH_ENABLED: "true"
       KC_HTTP_ENABLED: "true"
+      # Pins the issuer to the host-facing URL whichever hostname a request arrives on, so
+      # every token carries the `iss` the services validate (SPENDLY_OIDC_ISSUER).
+      KC_HOSTNAME: http://localhost:${KEYCLOAK_PORT:-8080}
       # Substituted into realm-spendly.json at import time.
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-google-client-id-not-set}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-google-client-secret-not-set}
@@ -243,6 +277,77 @@ services:
       - prometheus
       - loki
       - tempo
+    restart: unless-stopped
+
+  # --- Application ---------------------------------------------------------------------
+  # Built from source by the root Dockerfile (one image per SERVICE build arg) and
+  # frontend/Dockerfile. Public ports match the host-run defaults (CLAUDE.md 3), management
+  # ports are published on loopback only.
+
+  user-service:
+    <<: *spring-service
+    build:
+      context: .
+      args:
+        SERVICE: user-service
+    image: spendly/user-service:local
+    container_name: spendly-user-service
+    environment:
+      <<: *spring-environment
+      SPENDLY_USER_DB_URL: jdbc:postgresql://postgres:5432/spendly_user
+      MANAGEMENT_PORT: 9091
+    ports:
+      - "${USER_SERVICE_PORT:-8082}:8082"
+      - "127.0.0.1:${USER_SERVICE_MANAGEMENT_PORT:-9091}:9091"
+
+  account-service:
+    <<: *spring-service
+    build:
+      context: .
+      args:
+        SERVICE: account-service
+    image: spendly/account-service:local
+    container_name: spendly-account-service
+    environment:
+      <<: *spring-environment
+      SPENDLY_ACCOUNT_DB_URL: jdbc:postgresql://postgres:5432/spendly_account
+      MANAGEMENT_PORT: 9083
+    ports:
+      - "${ACCOUNT_SERVICE_PORT:-8083}:8083"
+      - "127.0.0.1:${ACCOUNT_SERVICE_MANAGEMENT_PORT:-9083}:9083"
+
+  transaction-service:
+    <<: *spring-service
+    build:
+      context: .
+      args:
+        SERVICE: transaction-service
+    image: spendly/transaction-service:local
+    container_name: spendly-transaction-service
+    environment:
+      <<: *spring-environment
+      SPENDLY_TRANSACTION_DB_URL: jdbc:postgresql://postgres:5432/spendly_transaction
+      MANAGEMENT_PORT: 9084
+    ports:
+      - "${TRANSACTION_SERVICE_PORT:-8084}:8084"
+      - "127.0.0.1:${TRANSACTION_SERVICE_MANAGEMENT_PORT:-9084}:9084"
+
+  # nginx serving the production Angular bundle. The browser talks to Keycloak and the
+  # services through their published host ports, exactly as with `ng serve`.
+  frontend:
+    build: ./frontend
+    image: spendly/frontend:local
+    container_name: spendly-frontend
+    ports:
+      - "${FRONTEND_PORT:-4200}:80"
+    depends_on:
+      user-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
     restart: unless-stopped
 
 volumes:

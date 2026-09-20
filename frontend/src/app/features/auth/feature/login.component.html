@@ -10,6 +10,10 @@
         Sign in with email
       </button>
 
+      <button matButton="outlined" type="button" [disabled]="!isReady()" (click)="register()">
+        Create account
+      </button>
+
       <div class="login__separator" role="separator">
         <mat-divider />
         <span>or</span>
@@ -44,8 +48,8 @@
       </button>
 
       <p>
-        Accounts and passwords are managed by Keycloak. Signing in redirects you to the identity
-        provider and back.
+        Accounts and passwords are managed by Keycloak. Signing in or creating an account redirects
+        you to the identity provider and back; sign-up needs only an email and a password.
       </p>
     </mat-card-content>
   </mat-card>

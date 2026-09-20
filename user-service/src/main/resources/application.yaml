@@ -12,7 +12,7 @@ spring:
       enabled: true
 
   datasource:
-    url: ${SPENDLY_DB_URL}
+    url: ${SPENDLY_USER_DB_URL:jdbc:postgresql://localhost:5432/spendly_user}
     username: ${SPENDLY_DB_USER}
     password: ${SPENDLY_DB_PASSWORD}
     hikari:
@@ -44,6 +44,11 @@ spring:
       resourceserver:
         jwt:
           issuer-uri: ${SPENDLY_OIDC_ISSUER}
+          # Set only inside docker compose, where the container cannot reach the issuer's
+          # localhost:8080 but the browser's tokens still carry it as `iss`. With both
+          # properties present Boot fetches keys from jwk-set-uri and keeps validating the
+          # iss claim against issuer-uri; an empty value leaves issuer discovery in place.
+          jwk-set-uri: ${SPENDLY_OIDC_JWK_SET_URI:}
           audiences:
             - spendly-api
 

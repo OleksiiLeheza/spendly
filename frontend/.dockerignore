@@ -1,0 +1,12 @@
+node_modules
+dist
+.angular
+test-results
+playwright-report
+blob-report
+e2e
+playwright.config.ts
+Dockerfile
+README.md
+.git*
+.DS_Store

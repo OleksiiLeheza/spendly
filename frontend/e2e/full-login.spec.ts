@@ -50,6 +50,20 @@ test.describe('signing in with email and password', () => {
     await expect(page.locator('mat-chip').filter({ hasText: 'USER' })).toBeVisible();
   });
 
+  test('the seeded administrator signs in with the ADMIN role', async ({ page }) => {
+    await page.goto('/login');
+    await page.getByRole('button', { name: 'Sign in with email' }).click();
+    await page.locator('#kc-form-login').waitFor();
+    await page.locator('#username').fill('admin@gmail.com');
+    await page.locator('#password').fill('admin');
+    await page.locator('#kc-login').click();
+
+    await page.waitForURL(/\/dashboard$/, { timeout: 20_000 });
+
+    await expect(page.getByText('Signed in as admin@gmail.com')).toBeVisible();
+    await expect(page.locator('mat-chip').filter({ hasText: 'ADMIN' })).toBeVisible();
+  });
+
   test('signing out returns the user to the login page', async ({ page }) => {
     await page.goto('/login');
     await page.getByRole('button', { name: 'Sign in with email' }).click();

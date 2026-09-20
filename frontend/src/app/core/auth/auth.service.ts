@@ -54,6 +54,15 @@ export class AuthService {
     this.oidc.authorize(undefined, { customParams: { kc_idp_hint: 'google' } });
   }
 
+  /**
+   * Same Authorization Code + PKCE flow, but `prompt=create` (OIDC "Initiating User
+   * Registration") opens Keycloak's sign-up form instead of the login form. The realm keeps
+   * that form to email + password; the account comes back signed in like any other login.
+   */
+  register(): void {
+    this.oidc.authorize(undefined, { customParams: { prompt: 'create' } });
+  }
+
   logout(): void {
     this.oidc.logoff().subscribe();
   }

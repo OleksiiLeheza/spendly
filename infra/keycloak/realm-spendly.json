@@ -171,6 +171,7 @@
   ],
   "users": [
     {
+      "id": "102d85d1-aa51-4fe7-8979-bc3c41f6bb95",
       "username": "dev@spendly.local",
       "email": "dev@spendly.local",
       "emailVerified": true,
@@ -189,12 +190,11 @@
       ]
     },
     {
-      "username": "admin@spendly.local",
-      "email": "admin@spendly.local",
+      "id": "c72a40b9-d9ee-4509-94c4-63fa57811855",
+      "username": "admin@gmail.com",
+      "email": "admin@gmail.com",
       "emailVerified": true,
       "enabled": true,
-      "firstName": "Admin",
-      "lastName": "User",
       "credentials": [
         {
           "type": "password",
@@ -216,5 +216,18 @@
     "auth": "",
     "ssl": "",
     "starttls": ""
+  },
+  "components": {
+    "org.keycloak.userprofile.UserProfileProvider": [
+      {
+        "providerId": "declarative-user-profile",
+        "subComponents": {},
+        "config": {
+          "kc.user.profile.config": [
+            "{\"attributes\":[{\"name\":\"username\",\"displayName\":\"${username}\",\"validations\":{\"length\":{\"min\":3,\"max\":255},\"username-prohibited-characters\":{},\"up-username-not-idn-homograph\":{}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"email\",\"displayName\":\"${email}\",\"validations\":{\"email\":{},\"length\":{\"max\":255}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"firstName\",\"displayName\":\"${firstName}\",\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}},\"permissions\":{\"view\":[\"admin\"],\"edit\":[\"admin\"]},\"multivalued\":false},{\"name\":\"lastName\",\"displayName\":\"${lastName}\",\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}},\"permissions\":{\"view\":[\"admin\"],\"edit\":[\"admin\"]},\"multivalued\":false}],\"groups\":[{\"name\":\"user-metadata\",\"displayHeader\":\"User metadata\",\"displayDescription\":\"Attributes, which refer to user metadata\"}]}"
+          ]
+        }
+      }
+    ]
   }
 }

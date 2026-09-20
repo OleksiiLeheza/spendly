@@ -64,4 +64,8 @@ export class LoginComponent {
   protected signInWithGoogle(): void {
     this.auth.loginWithGoogle();
   }
+
+  protected register(): void {
+    this.auth.register();
+  }
 }
