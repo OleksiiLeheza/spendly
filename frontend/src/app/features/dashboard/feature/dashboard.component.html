@@ -1,29 +1,183 @@
 <div class="page">
-  @if (store.loading()) {
-    <mat-progress-bar mode="indeterminate" aria-label="Loading your profile" />
-  } @else if (store.error(); as message) {
+  <header class="page__header">
+    <div>
+      <h1 class="page__title">{{ 'dashboard.title' | transloco }}</h1>
+      <p class="page__subtitle">{{ monthTitle() }}</p>
+    </div>
+    <div class="page__actions">
+      <a matButton="filled" routerLink="/transactions">
+        <mat-icon fontIcon="add" />
+        {{ 'dashboard.add' | transloco }}
+      </a>
+    </div>
+  </header>
+
+  <div class="kpis">
+    <mat-card appearance="outlined">
+      <mat-card-content class="kpi">
+        <span class="kpi__label">
+          <mat-icon fontIcon="account_balance_wallet" aria-hidden="true" />
+          {{ 'dashboard.kpis.balances' | transloco }}
+        </span>
+        @if (overview.loading() && !balances().length) {
+          <span class="kpi__value">—</span>
+        } @else if (!balances().length) {
+          <span class="kpi__value">—</span>
+          <span class="kpi__hint">{{ 'dashboard.kpis.noAccounts' | transloco }}</span>
+        } @else {
+          @for (balance of balances(); track balance) {
+            <span class="kpi__value">{{ balance }}</span>
+          }
+          <span class="kpi__hint">{{ 'dashboard.kpis.balancesHint' | transloco }}</span>
+        }
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card appearance="outlined">
+      <mat-card-content class="kpi">
+        <span class="kpi__label">
+          <mat-icon fontIcon="shopping_bag" aria-hidden="true" />
+          {{ 'dashboard.kpis.spent' | transloco }}
+        </span>
+        @if (budgetTotal(); as total) {
+          <span class="kpi__value">{{ moneyLabel(total.spent) }}</span>
+          <mat-progress-bar
+            mode="determinate"
+            [value]="total.percent > 100 ? 100 : total.percent"
+            [color]="total.percent > 100 ? 'warn' : 'primary'"
+            [attr.aria-label]="'budgets.usedAria' | transloco: { currency: total.currency }"
+          />
+          <span class="kpi__hint">
+            {{
+              'dashboard.kpis.budgetedOf'
+                | transloco: { percent: total.percent, limit: moneyLabel(total.limit) }
+            }}
+            · {{ 'common.daysLeft' | transloco: { count: daysLeft() } }}
+          </span>
+        } @else {
+          <span class="kpi__value">—</span>
+          <span class="kpi__hint">{{ 'dashboard.kpis.noBudgets' | transloco }}</span>
+        }
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card appearance="outlined">
+      <mat-card-content class="kpi">
+        <span class="kpi__label">
+          <mat-icon fontIcon="event_repeat" aria-hidden="true" />
+          {{ 'dashboard.kpis.due' | transloco }}
+        </span>
+        @if (overview.upcomingTotals()[0]; as total) {
+          <span class="kpi__value">{{ moneyLabel(total.outgoing) }}</span>
+          <span class="kpi__hint">
+            {{ 'dashboard.kpis.comingIn' | transloco: { amount: moneyLabel(total.incoming) } }}
+          </span>
+        } @else {
+          <span class="kpi__value">—</span>
+          <span class="kpi__hint">{{ 'dashboard.kpis.nothingScheduled' | transloco }}</span>
+        }
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card appearance="outlined">
+      <mat-card-content class="kpi">
+        <span class="kpi__label">
+          <mat-icon fontIcon="notifications" aria-hidden="true" />
+          {{ 'dashboard.kpis.attention' | transloco }}
+        </span>
+        <span class="kpi__value">{{ attention().length }}</span>
+        <span class="kpi__hint">
+          @if (attention().length) {
+            {{ attention()[0].title }}
+          } @else {
+            {{ 'dashboard.kpis.allOnTrack' | transloco }}
+          }
+        </span>
+      </mat-card-content>
+    </mat-card>
+  </div>
+
+  <div class="columns">
     <mat-card appearance="outlined">
       <mat-card-header>
-        <mat-card-title>Could not load your profile</mat-card-title>
+        <mat-card-title class="card-link">
+          {{ 'dashboard.budgetsTitle' | transloco }}
+          <a matButton routerLink="/budgets">{{ 'dashboard.seeAll' | transloco }}</a>
+        </mat-card-title>
       </mat-card-header>
-      <mat-card-content>{{ message }}</mat-card-content>
-      <mat-card-actions>
-        <button matButton="filled" type="button" (click)="retry()">Try again</button>
-      </mat-card-actions>
+      <mat-card-content>
+        @if (overview.loading() && !topBudgets().length) {
+          <app-skeleton-rows [count]="3" [label]="'dashboard.loadingBudgets' | transloco" />
+        } @else if (!topBudgets().length) {
+          <app-page-state
+            icon="data_usage"
+            [title]="'dashboard.noBudgetsTitle' | transloco"
+            [message]="'dashboard.noBudgetsMessage' | transloco"
+            [actionLabel]="'dashboard.setBudget' | transloco"
+            actionIcon="add"
+            (action)="(null)"
+          />
+        } @else {
+          @for (budget of topBudgets(); track budget.id; let last = $last) {
+            <app-budget-row [budget]="budget" [showActions]="false" />
+            @if (!last) {
+              <mat-divider />
+            }
+          }
+        }
+      </mat-card-content>
     </mat-card>
-  } @else if (view(); as profile) {
-    <app-profile-card [profile]="profile" />
-  } @else {
+
     <mat-card appearance="outlined">
       <mat-card-header>
-        <mat-card-title>Nothing here yet</mat-card-title>
+        <mat-card-title class="card-link">
+          {{ 'dashboard.upcomingTitle' | transloco }}
+          <a matButton routerLink="/recurring">{{ 'dashboard.seeAll' | transloco }}</a>
+        </mat-card-title>
       </mat-card-header>
-      <mat-card-content
-        >Your profile has not been created. Reload to provision it.</mat-card-content
-      >
-      <mat-card-actions>
-        <button matButton="filled" type="button" (click)="retry()">Load profile</button>
-      </mat-card-actions>
+      <mat-card-content>
+        @if (!upcoming().length) {
+          <p>{{ 'dashboard.nothingDue' | transloco }}</p>
+        } @else {
+          <mat-list>
+            @for (item of upcoming(); track item.key) {
+              <mat-list-item>
+                <span matListItemTitle>{{ item.name }}</span>
+                <span matListItemLine>{{ item.dueOn | date: 'EEE d MMM' }}</span>
+                <span matListItemMeta>
+                  <app-money-amount [money]="item.amount" [direction]="item.direction" />
+                </span>
+              </mat-list-item>
+            }
+          </mat-list>
+        }
+      </mat-card-content>
     </mat-card>
-  }
+  </div>
+
+  <mat-card appearance="outlined">
+    <mat-card-header>
+      <mat-card-title class="card-link">
+        {{ 'dashboard.recentTitle' | transloco }}
+        <a matButton routerLink="/transactions">{{ 'dashboard.allTransactions' | transloco }}</a>
+      </mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      @if (overview.loading() && !recent().length) {
+        <app-skeleton-rows [count]="4" [label]="'dashboard.loadingTransactions' | transloco" />
+      } @else if (!recent().length) {
+        <app-page-state
+          icon="receipt_long"
+          [title]="'dashboard.noTransactionsTitle' | transloco"
+          [message]="'dashboard.noTransactionsMessage' | transloco"
+        />
+      } @else {
+        <mat-list>
+          @for (entry of recent(); track entry.id) {
+            <app-transaction-row [entry]="entry" [link]="['/transactions', entry.id]" />
+          }
+        </mat-list>
+      }
+    </mat-card-content>
+  </mat-card>
 </div>

@@ -19,10 +19,12 @@ public class CategorySeeder {
 
     private final CategoryRepository categories;
     private final CategorySeeds seeds;
+    private final LedgerEvents events;
 
-    public CategorySeeder(CategoryRepository categories, CategorySeeds seeds) {
+    public CategorySeeder(CategoryRepository categories, CategorySeeds seeds, LedgerEvents events) {
         this.categories = categories;
         this.seeds = seeds;
+        this.events = events;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -34,6 +36,7 @@ public class CategorySeeder {
             roots.add(Category.create(ownerId, seed.name(), seed.kind(), seed.icon(), null, order++, seed.key()));
         }
         roots = categories.saveAllAndFlush(roots);
+        roots.forEach(events::categoryChanged);
 
         List<Category> children = new ArrayList<>();
         for (int i = 0; i < roots.size(); i++) {
@@ -44,7 +47,7 @@ public class CategorySeeder {
                         ownerId, child.name(), root.getKind(), null, root.getId(), childOrder++, child.key()));
             }
         }
-        categories.saveAllAndFlush(children);
+        categories.saveAllAndFlush(children).forEach(events::categoryChanged);
         log.info("Seeded {} default categories ({}) for owner {}", roots.size() + children.size(), language, ownerId);
         return roots.size() + children.size();
     }

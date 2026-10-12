@@ -31,6 +31,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -44,7 +45,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 @RestController
-@RequestMapping("/api/v1/transactions")
+@RequestMapping(value = "/api/v1/transactions", produces = MediaType.APPLICATION_JSON_VALUE)
 @Tag(name = "Transactions", description = "The caller's ledger. Entries are appended, never edited or deleted; a correction is a reversal.")
 @SecurityRequirement(name = "bearer-jwt")
 public class TransactionController {
@@ -58,12 +59,12 @@ public class TransactionController {
     }
 
     @PostMapping
-    @Operation(summary = "Post a ledger entry", description = "Send an Idempotency-Key header to make a retry return the entry created the first time.")
+    @Operation(operationId = "postTransaction", summary = "Post a ledger entry", description = "Send an Idempotency-Key header to make a retry return the entry created the first time.")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "The new entry"),
             @ApiResponse(responseCode = "200", description = "The entry an earlier request with the same Idempotency-Key created"),
             @ApiResponse(responseCode = "400", description = "Validation failed", content = {}),
-            @ApiResponse(responseCode = "401", description = "Missing or invalid access token", content = {}),
+            @ApiResponse(responseCode = "401", description = "Missing or invalid access token; for a TRANSFER also when the authentication is older than the step-up limit (WWW-Authenticate: Bearer error=\"insufficient_user_authentication\")", content = {}),
             @ApiResponse(responseCode = "404", description = "A named category does not exist for this caller", content = {}),
             @ApiResponse(responseCode = "422", description = "A domain rule was broken", content = {})
     })
@@ -83,7 +84,7 @@ public class TransactionController {
     }
 
     @GetMapping
-    @Operation(summary = "The feed, newest first", description = "Keyset-paginated: pass nextCursor back as ?cursor= for the following page. Offsets are not supported.")
+    @Operation(operationId = "transactionFeed", summary = "The feed, newest first", description = "Keyset-paginated: pass nextCursor back as ?cursor= for the following page. Offsets are not supported.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "One page of entries"),
             @ApiResponse(responseCode = "401", description = "Missing or invalid access token", content = {}),
@@ -117,7 +118,7 @@ public class TransactionController {
     }
 
     @GetMapping("/{transactionId}")
-    @Operation(summary = "Get one entry, with notes and splits")
+    @Operation(operationId = "getTransaction", summary = "Get one entry, with notes and splits")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "The entry"),
             @ApiResponse(responseCode = "401", description = "Missing or invalid access token", content = {}),
@@ -128,7 +129,7 @@ public class TransactionController {
     }
 
     @PatchMapping("/{transactionId}")
-    @Operation(summary = "Relabel an entry", description = "Description, merchant, notes, tags, category and splits only. The monetary facts are immutable.")
+    @Operation(operationId = "updateTransaction", summary = "Relabel an entry", description = "Description, merchant, notes, tags, category and splits only. The monetary facts are immutable.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "The updated entry"),
             @ApiResponse(responseCode = "400", description = "Validation failed", content = {}),
@@ -144,10 +145,10 @@ public class TransactionController {
     }
 
     @PostMapping("/{transactionId}/reverse")
-    @Operation(summary = "Reverse an entry", description = "Appends an entry of the opposite direction on the same accounts, categories and date, and links the two.")
+    @Operation(operationId = "reverseTransaction", summary = "Reverse an entry", description = "Appends an entry of the opposite direction on the same accounts, categories and date, and links the two.")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "The reversing entry"),
-            @ApiResponse(responseCode = "401", description = "Missing or invalid access token", content = {}),
+            @ApiResponse(responseCode = "401", description = "Missing or invalid access token, or an authentication older than the step-up limit (WWW-Authenticate: Bearer error=\"insufficient_user_authentication\")", content = {}),
             @ApiResponse(responseCode = "404", description = "No such entry for this caller", content = {}),
             @ApiResponse(responseCode = "409", description = "Already reversed", content = {}),
             @ApiResponse(responseCode = "422", description = "The entry is itself a reversal", content = {})

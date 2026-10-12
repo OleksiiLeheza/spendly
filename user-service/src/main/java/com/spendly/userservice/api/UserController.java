@@ -26,7 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping(value = "/api/v1/users", produces = MediaType.APPLICATION_JSON_VALUE)
-@Tag(name = "Users", description = "The caller's own profile. Keycloak owns credentials and account recovery.")
+@Tag(name = "Users", description = "The caller's own profile. Sign-in and account recovery belong to auth-service.")
 @SecurityRequirement(name = "bearer-jwt")
 public class UserController {
 

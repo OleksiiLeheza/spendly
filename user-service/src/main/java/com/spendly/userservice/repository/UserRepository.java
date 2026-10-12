@@ -11,8 +11,8 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface UserRepository extends JpaRepository<User, UUID> {
 
-    @Query("SELECT u FROM User u WHERE u.keycloakId = :keycloakId AND u.deletedAt IS NULL")
-    Optional<User> findActiveByKeycloakId(@Param("keycloakId") UUID keycloakId);
+    @Query("SELECT u FROM User u WHERE u.subject = :subject AND u.deletedAt IS NULL")
+    Optional<User> findActiveBySubject(@Param("subject") UUID subject);
 
     @Query("SELECT u FROM User u WHERE LOWER(u.email) = LOWER(:email) AND u.deletedAt IS NULL")
     Optional<User> findActiveByEmailIgnoreCase(@Param("email") String email);

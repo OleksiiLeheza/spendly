@@ -14,13 +14,17 @@ import com.spendly.common.web.ApiException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.security.test.context.support.WithMockUser;
 
-@WithMockUser
 class TransferPairInvariantTest extends AbstractIntegrationTest {
+
+    @AfterEach
+    void clearCaller() {
+        TestOwners.actAsNobody();
+    }
 
     private static final LocalDate TODAY = LocalDate.of(2026, 9, 19);
 
@@ -36,6 +40,7 @@ class TransferPairInvariantTest extends AbstractIntegrationTest {
     @Test
     void aTransferBetweenOwnAccountsNetsToZero() {
         UUID owner = UUID.randomUUID();
+        TestOwners.actAs(owner);
         UUID from = open(owner, "USD");
         UUID to = open(owner, "USD");
         UUID transfer = UUID.randomUUID();
@@ -60,6 +65,7 @@ class TransferPairInvariantTest extends AbstractIntegrationTest {
     @Test
     void redeliveringATransferAppliesItOnce() {
         UUID owner = UUID.randomUUID();
+        TestOwners.actAs(owner);
         UUID from = open(owner, "USD");
         UUID to = open(owner, "USD");
         TransferCommand command = new TransferCommand(owner, UUID.randomUUID(), from, to, Money.of("15.00", "USD"),
@@ -77,6 +83,7 @@ class TransferPairInvariantTest extends AbstractIntegrationTest {
     @Test
     void rejectsATransferToTheSameAccount() {
         UUID owner = UUID.randomUUID();
+        TestOwners.actAs(owner);
         UUID account = open(owner, "USD");
 
         assertThatThrownBy(() -> postings.transfer(
@@ -88,6 +95,7 @@ class TransferPairInvariantTest extends AbstractIntegrationTest {
     @Test
     void rejectsANonPositiveAmount() {
         UUID owner = UUID.randomUUID();
+        TestOwners.actAs(owner);
         UUID from = open(owner, "USD");
         UUID to = open(owner, "USD");
 
@@ -103,6 +111,7 @@ class TransferPairInvariantTest extends AbstractIntegrationTest {
     @Test
     void aCrossCurrencyTransferIsRejectedAndLeavesBothBalancesUntouched() {
         UUID owner = UUID.randomUUID();
+        TestOwners.actAs(owner);
         UUID usd = open(owner, "USD");
         UUID eur = open(owner, "EUR");
 
@@ -120,20 +129,25 @@ class TransferPairInvariantTest extends AbstractIntegrationTest {
     void aTransferIntoSomeoneElsesAccountIsNotFoundAndRollsBack() {
         UUID alice = UUID.randomUUID();
         UUID bob = UUID.randomUUID();
+        TestOwners.actAs(alice);
         UUID alicesAccount = open(alice, "USD");
+        TestOwners.actAs(bob);
         UUID bobsAccount = open(bob, "USD");
 
+        TestOwners.actAs(alice);
         assertThatThrownBy(() -> postings.transfer(new TransferCommand(
                 alice, UUID.randomUUID(), alicesAccount, bobsAccount, Money.of("10.00", "USD"), TODAY)))
                 .isInstanceOf(ApiException.NotFound.class);
 
         assertThat(accounts.get(alice, alicesAccount).getBalance()).isEqualTo(Money.zero("USD"));
+        TestOwners.actAs(bob);
         assertThat(accounts.get(bob, bobsAccount).getBalance()).isEqualTo(Money.zero("USD"));
     }
 
     @Test
     void aTransferOutOfAnArchivedAccountIsRejected() {
         UUID owner = UUID.randomUUID();
+        TestOwners.actAs(owner);
         UUID from = open(owner, "USD");
         UUID to = open(owner, "USD");
         accounts.archive(owner, from);

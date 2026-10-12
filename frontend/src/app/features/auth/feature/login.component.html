@@ -1,56 +1,210 @@
 <main class="login">
-  <mat-card class="login__card" appearance="outlined">
-    <mat-card-header>
-      <mat-card-title>Spendly</mat-card-title>
-      <mat-card-subtitle>Track spending, budgets and shared expenses</mat-card-subtitle>
-    </mat-card-header>
+  <section class="login__hero" aria-labelledby="login-headline">
+    <div class="login__brand">
+      <mat-icon class="login__brand-mark" aria-hidden="true">account_balance_wallet</mat-icon>
+      <span>Spendly</span>
+    </div>
 
-    <mat-card-content class="login__content">
-      <button matButton="filled" type="button" [disabled]="!isReady()" (click)="signIn()">
-        Sign in with email
-      </button>
+    <div class="login__pitch">
+      <h1 id="login-headline" class="login__headline">{{ 'auth.headline' | transloco }}</h1>
+      <p class="login__lead">{{ 'auth.tagline' | transloco }}</p>
 
-      <button matButton="outlined" type="button" [disabled]="!isReady()" (click)="register()">
-        Create account
-      </button>
+      <ul class="login__features">
+        @for (feature of features; track feature.key) {
+          <li class="login__feature">
+            <mat-icon class="login__feature-icon" aria-hidden="true">{{ feature.icon }}</mat-icon>
+            <div>
+              <h2 class="login__feature-title">
+                {{ 'auth.features.' + feature.key + '.title' | transloco }}
+              </h2>
+              <p class="login__feature-text">
+                {{ 'auth.features.' + feature.key + '.text' | transloco }}
+              </p>
+            </div>
+          </li>
+        }
+      </ul>
+    </div>
+  </section>
 
-      <div class="login__separator" role="separator">
-        <mat-divider />
-        <span>or</span>
-        <mat-divider />
-      </div>
+  <section class="login__panel">
+    <mat-button-toggle-group
+      class="login__language"
+      hideSingleSelectionIndicator
+      [value]="language.lang()"
+      [aria-label]="'settings.language.title' | transloco"
+      (change)="chooseLanguage($event.value)"
+    >
+      @for (lang of languages; track lang) {
+        <mat-button-toggle [value]="lang">{{
+          'settings.language.' + lang | transloco
+        }}</mat-button-toggle>
+      }
+    </mat-button-toggle-group>
 
-      <button
-        matButton="outlined"
-        type="button"
-        [disabled]="!isReady()"
-        (click)="signInWithGoogle()"
-      >
-        <svg class="login__google-mark" viewBox="0 0 18 18" aria-hidden="true" focusable="false">
-          <path
-            fill="#4285F4"
-            d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62Z"
-          />
-          <path
-            fill="#34A853"
-            d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.81.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18Z"
-          />
-          <path
-            fill="#FBBC05"
-            d="M3.97 10.72a5.4 5.4 0 0 1 0-3.44V4.95H.96a9 9 0 0 0 0 8.1l3.01-2.33Z"
-          />
-          <path
-            fill="#EA4335"
-            d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.46.9 11.43 0 9 0A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58Z"
-          />
-        </svg>
-        Continue with Google
-      </button>
+    <mat-card class="login__card" appearance="outlined">
+      @if (busy()) {
+        <mat-progress-bar mode="indeterminate" />
+      }
 
-      <p>
-        Accounts and passwords are managed by Keycloak. Signing in or creating an account redirects
-        you to the identity provider and back; sign-up needs only an email and a password.
-      </p>
-    </mat-card-content>
-  </mat-card>
+      @if (step() === 'credentials') {
+        <mat-card-header>
+          <mat-card-title>{{
+            (registering() ? 'auth.createTitle' : 'auth.welcome') | transloco
+          }}</mat-card-title>
+          <mat-card-subtitle>{{
+            (registering() ? 'auth.createHint' : 'auth.welcomeHint') | transloco
+          }}</mat-card-subtitle>
+        </mat-card-header>
+
+        <mat-card-content class="login__content">
+          @if (error() === 'google' && !errorKey()) {
+            <p class="login__error" role="alert">{{ 'auth.errors.google' | transloco }}</p>
+          }
+
+          <form class="login__form" [formGroup]="credentials" (ngSubmit)="submitCredentials()">
+            <mat-form-field appearance="outline">
+              <mat-label>{{ 'auth.email' | transloco }}</mat-label>
+              <input
+                matInput
+                type="email"
+                formControlName="email"
+                autocomplete="username"
+                inputmode="email"
+              />
+              @if (credentials.controls.email.hasError('required')) {
+                <mat-error>{{ 'common.required' | transloco }}</mat-error>
+              } @else if (credentials.controls.email.hasError('email')) {
+                <mat-error>{{ 'auth.errors.emailFormat' | transloco }}</mat-error>
+              }
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+              <mat-label>{{ 'auth.password' | transloco }}</mat-label>
+              <input
+                matInput
+                type="password"
+                formControlName="password"
+                [autocomplete]="registering() ? 'new-password' : 'current-password'"
+              />
+              @if (registering()) {
+                <mat-hint>{{ 'auth.passwordHint' | transloco }}</mat-hint>
+              }
+              @if (credentials.controls.password.hasError('required')) {
+                <mat-error>{{ 'common.required' | transloco }}</mat-error>
+              }
+            </mat-form-field>
+
+            @if (errorKey(); as key) {
+              <p class="login__error" role="alert">{{ key | transloco }}</p>
+            }
+
+            <button matButton="filled" type="submit" [disabled]="busy() || !isReady()">
+              <mat-icon>{{ registering() ? 'person_add' : 'login' }}</mat-icon>
+              {{ (registering() ? 'auth.createAccount' : 'auth.signIn') | transloco }}
+            </button>
+          </form>
+
+          @if (googleOffered()) {
+            <div class="login__separator" role="separator">
+              <mat-divider />
+              <span>{{ 'auth.or' | transloco }}</span>
+              <mat-divider />
+            </div>
+
+            <button
+              matButton="outlined"
+              type="button"
+              [disabled]="busy() || !isReady()"
+              (click)="signInWithGoogle()"
+            >
+              <svg
+                class="login__google-mark"
+                viewBox="0 0 18 18"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <path
+                  fill="#4285F4"
+                  d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62Z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.81.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18Z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M3.97 10.72a5.4 5.4 0 0 1 0-3.44V4.95H.96a9 9 0 0 0 0 8.1l3.01-2.33Z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.46.9 11.43 0 9 0A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58Z"
+                />
+              </svg>
+              {{ 'auth.continueGoogle' | transloco }}
+            </button>
+          }
+
+          <button
+            matButton="text"
+            class="login__link"
+            type="button"
+            [disabled]="busy()"
+            (click)="toggleRegistering()"
+          >
+            {{ (registering() ? 'auth.haveAccount' : 'auth.newHere') | transloco }}
+            {{ (registering() ? 'auth.signIn' : 'auth.createAccount') | transloco }}
+          </button>
+        </mat-card-content>
+      } @else {
+        <mat-card-header>
+          <mat-card-title>{{ 'auth.codeTitle' | transloco }}</mat-card-title>
+          <mat-card-subtitle>{{ 'auth.codeHint' | transloco }}</mat-card-subtitle>
+        </mat-card-header>
+
+        <mat-card-content class="login__content">
+          <form class="login__form" [formGroup]="verification" (ngSubmit)="submitCode()">
+            <mat-form-field appearance="outline">
+              <mat-label>{{ 'auth.code' | transloco }}</mat-label>
+              <input
+                matInput
+                formControlName="code"
+                autocomplete="one-time-code"
+                inputmode="numeric"
+              />
+              @if (verification.controls.code.hasError('required')) {
+                <mat-error>{{ 'common.required' | transloco }}</mat-error>
+              }
+            </mat-form-field>
+
+            @if (errorKey(); as key) {
+              <p class="login__error" role="alert">{{ key | transloco }}</p>
+            }
+
+            <button matButton="filled" type="submit" [disabled]="busy()">
+              <mat-icon>verified_user</mat-icon>
+              {{ 'auth.verify' | transloco }}
+            </button>
+          </form>
+
+          <button
+            matButton="text"
+            class="login__link"
+            type="button"
+            [disabled]="busy()"
+            (click)="backToCredentials()"
+          >
+            {{ 'auth.back' | transloco }}
+          </button>
+        </mat-card-content>
+      }
+
+      <mat-divider />
+
+      <mat-card-footer class="login__footer">
+        <mat-icon aria-hidden="true">lock</mat-icon>
+        <p class="login__explain">{{ 'auth.explain' | transloco }}</p>
+      </mat-card-footer>
+    </mat-card>
+  </section>
 </main>

@@ -6,6 +6,8 @@ import java.io.Serializable;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.Currency;
 import java.util.List;
 import java.util.Objects;
@@ -150,6 +152,60 @@ public record Money(
         for (int i = 0; i < parts; i++) {
             long share = base + (i < remainder ? step : 0);
             shares.add(ofMinor(share, currency.getCurrencyCode()));
+        }
+        return List.copyOf(shares);
+    }
+
+    /**
+     * Splits this amount proportionally to {@code weights}, so a share's size is {@code weight / sum(weights)} of the
+     * whole. The largest-remainder method spreads the indivisible remainder over the shares whose ideal allocation was
+     * cut the most, so the result still sums back to exactly this amount and no minor unit is lost.
+     *
+     * <p>
+     * A weight of {@code 1} for every participant reproduces {@link #allocate(int)}; a percentage split passes
+     * {@code List.of(60L, 40L)} and a shares split passes the raw share counts.
+     */
+    public List<Money> allocate(List<Long> weights) {
+        if (weights.isEmpty()) {
+            throw new IllegalArgumentException("weights must not be empty");
+        }
+        long weightSum = 0;
+        for (long weight : weights) {
+            if (weight < 0) {
+                throw new IllegalArgumentException("a weight must not be negative");
+            }
+            weightSum += weight;
+        }
+        if (weightSum == 0) {
+            throw new IllegalArgumentException("weights must sum to a positive number");
+        }
+
+        int size = weights.size();
+        long total = toMinorUnits();
+        long[] base = new long[size];
+        long[] remainder = new long[size];
+        long allocated = 0;
+        for (int i = 0; i < size; i++) {
+            long numerator = total * weights.get(i);
+            base[i] = numerator / weightSum;
+            remainder[i] = numerator - base[i] * weightSum;
+            allocated += base[i];
+        }
+
+        long left = total - allocated;
+        long step = left < 0 ? -1 : 1;
+        Integer[] order = new Integer[size];
+        for (int i = 0; i < size; i++) {
+            order[i] = i;
+        }
+        Arrays.sort(order, Comparator.comparingLong((Integer i) -> Math.abs(remainder[i])).reversed());
+        for (int k = 0; k < Math.abs(left); k++) {
+            base[order[k]] += step;
+        }
+
+        List<Money> shares = new ArrayList<>(size);
+        for (long minorUnits : base) {
+            shares.add(ofMinor(minorUnits, currency.getCurrencyCode()));
         }
         return List.copyOf(shares);
     }

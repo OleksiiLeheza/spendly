@@ -15,13 +15,17 @@ import com.spendly.common.money.Money;
 import com.spendly.common.web.ApiException;
 import java.time.LocalDate;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.security.test.context.support.WithMockUser;
 
-@WithMockUser
 class BalanceRecalculationTest extends AbstractIntegrationTest {
+
+    @AfterEach
+    void clearCaller() {
+        TestOwners.actAsNobody();
+    }
 
     private static final LocalDate TODAY = LocalDate.of(2026, 9, 19);
 
@@ -37,6 +41,7 @@ class BalanceRecalculationTest extends AbstractIntegrationTest {
     @Test
     void balanceIsTheRunningSumOfPostings() {
         UUID owner = UUID.randomUUID();
+        TestOwners.actAs(owner);
         UUID account = open(owner, "USD");
 
         postings.post(new PostingCommand(owner, account, UUID.randomUUID(), Money.of("100.00", "USD"), TODAY));
@@ -48,6 +53,7 @@ class BalanceRecalculationTest extends AbstractIntegrationTest {
     @Test
     void redeliveringTheSameLedgerEntryDoesNotDoubleBook() {
         UUID owner = UUID.randomUUID();
+        TestOwners.actAs(owner);
         UUID account = open(owner, "USD");
         UUID ledgerEntry = UUID.randomUUID();
         PostingCommand command = new PostingCommand(owner, account, ledgerEntry, Money.of("100.00", "USD"), TODAY);
@@ -63,6 +69,7 @@ class BalanceRecalculationTest extends AbstractIntegrationTest {
     @Test
     void rejectsAPostingInAnotherCurrencyWithoutTouchingTheBalance() {
         UUID owner = UUID.randomUUID();
+        TestOwners.actAs(owner);
         UUID account = open(owner, "USD");
         postings.post(new PostingCommand(owner, account, UUID.randomUUID(), Money.of("10.00", "USD"), TODAY));
 
@@ -78,6 +85,7 @@ class BalanceRecalculationTest extends AbstractIntegrationTest {
     @Test
     void archivedAccountsTakeNoPostings() {
         UUID owner = UUID.randomUUID();
+        TestOwners.actAs(owner);
         UUID account = open(owner, "USD");
         accounts.archive(owner, account);
 
@@ -90,6 +98,7 @@ class BalanceRecalculationTest extends AbstractIntegrationTest {
     @Test
     void reconciliationRepairsACachedBalanceThatDriftedFromTheLedger() {
         UUID owner = UUID.randomUUID();
+        TestOwners.actAs(owner);
         UUID account = open(owner, "USD");
         postings.post(new PostingCommand(owner, account, UUID.randomUUID(), Money.of("100.00", "USD"), TODAY));
         postings.post(new PostingCommand(owner, account, UUID.randomUUID(), Money.of("-30.25", "USD"), TODAY));
@@ -114,6 +123,7 @@ class BalanceRecalculationTest extends AbstractIntegrationTest {
     @Test
     void anotherOwnerCannotPostToTheAccount() {
         UUID owner = UUID.randomUUID();
+        TestOwners.actAs(owner);
         UUID account = open(owner, "USD");
 
         assertThatThrownBy(() -> postings.post(new PostingCommand(

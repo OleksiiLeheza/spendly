@@ -17,9 +17,23 @@ COPY config/ config/
 COPY spendly-bom/ spendly-bom/
 COPY common/ common/
 COPY events/ events/
+COPY auth-service/ auth-service/
 COPY user-service/ user-service/
 COPY account-service/ account-service/
 COPY transaction-service/ transaction-service/
+COPY budget-service/ budget-service/
+COPY recurring-service/ recurring-service/
+COPY goal-service/ goal-service/
+COPY notification-service/ notification-service/
+COPY import-service/ import-service/
+COPY analytics-service/ analytics-service/
+COPY sharing-service/ sharing-service/
+COPY discovery-server/ discovery-server/
+COPY config-server/ config-server/
+COPY api-gateway/ api-gateway/
+COPY jwt-lab/ jwt-lab/
+COPY architecture-tests/ architecture-tests/
+COPY infra/config-repo/ infra/config-repo/
 
 # Tests, Spotless, SpotBugs and the rest of the verify gate run on the host (./mvnw verify);
 # the image only needs compiled, repackaged jars. Error Prone and NullAway still run, because
@@ -40,6 +54,10 @@ ARG SERVICE
 LABEL org.opencontainers.image.title="spendly/${SERVICE}"
 
 RUN addgroup -S spendly && adduser -S -G spendly spendly
+# config-server keeps its git working copy here, on a named volume. A fresh volume inherits
+# the ownership of the directory it covers, so this is what lets a non-root container write
+# to it; every other service simply ignores it.
+RUN mkdir -p /var/spendly && chown -R spendly:spendly /var/spendly
 WORKDIR /application
 COPY --from=extract /extract/extracted/dependencies/ ./
 COPY --from=extract /extract/extracted/spring-boot-loader/ ./

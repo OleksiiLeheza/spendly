@@ -9,7 +9,7 @@ const prettier = require('eslint-config-prettier');
 module.exports = defineConfig([
   {
     // Generated from the gateway's OpenAPI document; regenerate rather than edit.
-    ignores: ['src/app/core/api-client/**', 'dist/**', '.angular/**', 'coverage/**'],
+    ignores: ['src/app/core/api/**', 'dist/**', '.angular/**', 'coverage/**'],
   },
   {
     files: ['**/*.ts'],

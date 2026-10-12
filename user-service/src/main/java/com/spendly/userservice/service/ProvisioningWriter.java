@@ -15,31 +15,36 @@ import org.springframework.transaction.annotation.Transactional;
 public class ProvisioningWriter {
 
     private final UserRepository users;
+    private final UserEvents events;
 
-    public ProvisioningWriter(UserRepository users) {
+    public ProvisioningWriter(UserRepository users, UserEvents events) {
         this.users = users;
+        this.events = events;
     }
 
-    public boolean exists(UUID keycloakId) {
-        return users.findActiveByKeycloakId(keycloakId).isPresent();
+    public boolean exists(UUID subject) {
+        return users.findActiveBySubject(subject).isPresent();
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public User insert(CurrentUserPrincipal principal, String email) {
         User user = new User();
-        user.setKeycloakId(principal.id());
+        user.setSubject(principal.id());
         user.setEmail(email);
         user.setDisplayName(principal.username());
         user.setRole(roleOf(principal));
-        return users.saveAndFlush(user);
+        User saved = users.saveAndFlush(user);
+        events.profileChanged(saved);
+        return saved;
     }
 
     @Transactional
-    public User sync(UUID keycloakId, CurrentUserPrincipal principal, String email) {
-        User user = users.findActiveByKeycloakId(keycloakId)
-                .orElseThrow(() -> new ApiException.NotFound("User", keycloakId));
+    public User sync(UUID subject, CurrentUserPrincipal principal, String email) {
+        User user = users.findActiveBySubject(subject)
+                .orElseThrow(() -> new ApiException.NotFound("User", subject));
         if (!email.equalsIgnoreCase(user.getEmail())) {
             user.setEmail(email);
+            events.profileChanged(user);
         }
         Role tokenRole = roleOf(principal);
         if (user.getRole() != tokenRole) {

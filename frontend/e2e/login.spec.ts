@@ -1,6 +1,5 @@
-import { test, expect } from '@playwright/test';
-
-const KEYCLOAK = process.env['E2E_KEYCLOAK_URL'] ?? 'http://localhost:8080';
+import { test, expect } from './fixtures';
+import { NEEDS_STACK, stackIsUp } from './stack';
 
 test.describe('login page', () => {
   test('redirects an anonymous visitor away from the dashboard', async ({ page }) => {
@@ -8,11 +7,15 @@ test.describe('login page', () => {
     await expect(page).toHaveURL(/\/login$/);
   });
 
-  test('offers both email and Google sign-in', async ({ page }) => {
+  test('asks for an email and a password', async ({ page }) => {
     await page.goto('/login');
 
-    await expect(page.getByRole('button', { name: 'Sign in with email' })).toBeEnabled();
-    await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeEnabled();
+    await expect(page.getByLabel('Email')).toBeVisible();
+    await expect(page.getByLabel('Password')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'New to Spendly? Create account' }),
+    ).toBeVisible();
   });
 
   test('has no horizontal overflow at phone width', async ({ page }) => {
@@ -25,46 +28,31 @@ test.describe('login page', () => {
     expect(overflows).toBe(false);
   });
 
-  test('sends the user to Keycloak with PKCE parameters', async ({ page }) => {
-    const reachable = await fetch(`${KEYCLOAK}/realms/spendly/.well-known/openid-configuration`)
-      .then((r) => r.ok)
-      .catch(() => false);
-    test.skip(!reachable, 'Keycloak is not running; start the Docker stack first');
+  test('a wrong password says so and keeps the person on the page', async ({ page }) => {
+    test.skip(!(await stackIsUp()), NEEDS_STACK);
 
     await page.goto('/login');
-    await page.getByRole('button', { name: 'Sign in with email' }).click();
+    await page.getByLabel('Email').fill('dev@spendly.local');
+    await page.getByLabel('Password').fill('not the password');
+    await page.getByRole('button', { name: 'Sign in' }).click();
 
-    await page.waitForURL(/\/realms\/spendly\/protocol\/openid-connect\/auth/);
-    const params = new URL(page.url()).searchParams;
-
-    expect(params.get('client_id')).toBe('spendly-web');
-    expect(params.get('response_type')).toBe('code');
-    expect(params.get('code_challenge_method')).toBe('S256');
-    expect(params.get('code_challenge')).toBeTruthy();
-    // A public client must never ship a secret to the browser.
-    expect(params.get('client_secret')).toBeNull();
+    await expect(page.getByRole('alert')).toHaveText('The email or the password is not right.');
+    await expect(page).toHaveURL(/\/login$/);
   });
 
-  test('the Google button jumps straight to the Google identity provider', async ({ page }) => {
-    const reachable = await fetch(`${KEYCLOAK}/realms/spendly/.well-known/openid-configuration`)
-      .then((r) => r.ok)
-      .catch(() => false);
-    test.skip(!reachable, 'Keycloak is not running; start the Docker stack first');
+  test('the Google button appears only when Google is configured', async ({ page }) => {
+    test.skip(!(await stackIsUp()), NEEDS_STACK);
+    const providers = await page.request
+      .get(`${process.env['E2E_GATEWAY_URL'] ?? 'http://localhost:8081'}/api/v1/auth/providers`)
+      .then((response) => response.json() as Promise<{ google: boolean }>);
 
     await page.goto('/login');
-    await page.getByRole('button', { name: 'Continue with Google' }).click();
 
-    // With kc_idp_hint set, Keycloak skips its own provider chooser and forwards straight
-    // to Google, so the browser never settles on the realm's auth page.
-    await page.waitForURL(/accounts\.google\.com/, { timeout: 20_000 });
-
-    const params = new URL(page.url()).searchParams;
-    expect(params.get('client_id')).toBeTruthy();
-
-    // Until real credentials are in .env the realm forwards the placeholder id and Google
-    // rejects it. Reaching Google at all is what proves the broker is wired up.
-    if (params.get('client_id') === 'google-client-id-not-set') {
-      expect(page.url()).toContain('authError');
+    const google = page.getByRole('button', { name: 'Continue with Google' });
+    if (providers.google) {
+      await expect(google).toBeEnabled();
+    } else {
+      await expect(google).toHaveCount(0);
     }
   });
 });

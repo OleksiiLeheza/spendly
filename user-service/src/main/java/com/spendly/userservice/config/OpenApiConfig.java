@@ -22,7 +22,7 @@ public class OpenApiConfig {
                 .info(new Info()
                         .title("Spendly user-service")
                         .version("v1")
-                        .description("User profiles provisioned from Keycloak identities"))
+                        .description("User profiles provisioned from auth-service identities"))
                 .components(new Components()
                         .addSecuritySchemes(
                                 "bearer-jwt",

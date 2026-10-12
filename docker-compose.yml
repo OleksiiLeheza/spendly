@@ -18,7 +18,15 @@ x-spring-service: &spring-service
   depends_on:
     postgres:
       condition: service_healthy
-    keycloak:
+    databases:
+      condition: service_completed_successfully
+    kafka:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    discovery-server:
+      condition: service_healthy
+    config-server:
       condition: service_healthy
   healthcheck:
     test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:$${MANAGEMENT_PORT}/actuator/health/readiness"]
@@ -30,18 +38,36 @@ x-spring-service: &spring-service
 x-spring-environment: &spring-environment
   SPENDLY_DB_USER: ${POSTGRES_USER:-spendly}
   SPENDLY_DB_PASSWORD: ${POSTGRES_PASSWORD:-spendly}
-  # Tokens are minted for the browser, so their `iss` is the host-facing Keycloak URL (pinned
-  # by KC_HOSTNAME below). A container cannot reach localhost:8080, so the signing keys come
-  # from the compose network name instead; see spring.security.oauth2 in application.yaml.
-  SPENDLY_OIDC_ISSUER: ${SPENDLY_OIDC_ISSUER:-http://localhost:8080/realms/spendly}
-  SPENDLY_OIDC_JWK_SET_URI: http://keycloak:8080/realms/spendly/protocol/openid-connect/certs
+  # auth-service signs every access token with `iss` set to SPENDLY_OIDC_ISSUER, and every
+  # other service checks that name against the keys it fetches from auth-service's JWKS.
+  SPENDLY_OIDC_ISSUER: ${SPENDLY_OIDC_ISSUER:-http://localhost:8096}
+  SPENDLY_OIDC_JWK_SET_URI: http://auth-service:8096/.well-known/jwks.json
   SPENDLY_OTLP_ENDPOINT: http://tempo:4318/v1/traces
   SPENDLY_CORS_ORIGINS: ${SPENDLY_CORS_ORIGINS:-http://localhost:4200}
+  # The broker's container-side listener (see KAFKA_ADVERTISED_LISTENERS).
+  SPENDLY_KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+  # How outbox_event reaches Kafka: `poller` (the in-service relay) or `cdc` (Debezium, which
+  # needs `docker compose --profile cdc up -d`). See docs/outbox-poller-vs-debezium.md.
+  SPENDLY_OUTBOX_MODE: ${SPENDLY_OUTBOX_MODE:-poller}
+  SPENDLY_REDIS_URL: redis://redis:6379
+  # Client-side discovery (FI-34) and central configuration (FI-33). Both are optional at
+  # runtime: a service that cannot reach them keeps its packaged defaults and DNS names.
+  SPENDLY_EUREKA_ENABLED: "true"
+  SPENDLY_EUREKA_URL: http://discovery-server:8761/eureka/
+  SPENDLY_CONFIG_SERVER_URL: http://config-server:8888
+  # Demo dataset (common.demo.DemoDataProperties). Change these in .env and restart.
+  SPENDLY_DEMO_DATA: ${SPENDLY_DEMO_DATA:-true}
+  SPENDLY_DEMO_DATA_RESET: ${SPENDLY_DEMO_DATA_RESET:-false}
+  SPENDLY_DEMO_DATA_MONTHS: ${SPENDLY_DEMO_DATA_MONTHS:-4}
+  SPENDLY_DEMO_DATA_SCALE: ${SPENDLY_DEMO_DATA_SCALE:-100}
 
 services:
   postgres:
     image: postgres:17-alpine
     container_name: spendly-postgres
+    # Logical decoding is what lets Debezium read outbox_event from the WAL (FI-47). It costs a
+    # little extra WAL and is harmless while the outbox mode is `poller`.
+    command: ["postgres", "-c", "wal_level=logical", "-c", "max_replication_slots=10", "-c", "max_wal_senders=10"]
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-spendly}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-spendly}
@@ -58,48 +84,24 @@ services:
       retries: 20
     restart: unless-stopped
 
-  keycloak:
-    image: quay.io/keycloak/keycloak:26.4
-    container_name: spendly-keycloak
-    # start-dev keeps the realm in Postgres but relaxes TLS and hostname checks.
-    # --import-realm replays infra/keycloak on an empty database: realm-as-code (FI-10).
-    command: ["start-dev", "--import-realm"]
+  # Creates whichever per-service databases are missing, on every `up`. Postgres runs its
+  # init scripts only on an empty volume, so a database added later (a new service) would
+  # otherwise never exist on a stack that was started before it. The script is idempotent.
+  databases:
+    image: postgres:17-alpine
+    container_name: spendly-databases
+    command: ["bash", "/init-databases.sh"]
     environment:
-      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
-      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
-      KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
-      KC_DB_USERNAME: ${POSTGRES_USER:-spendly}
-      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:-spendly}
-      KC_HEALTH_ENABLED: "true"
-      KC_HTTP_ENABLED: "true"
-      # Pins the issuer to the host-facing URL whichever hostname a request arrives on, so
-      # every token carries the `iss` the services validate (SPENDLY_OIDC_ISSUER).
-      KC_HOSTNAME: http://localhost:${KEYCLOAK_PORT:-8080}
-      # Substituted into realm-spendly.json at import time.
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-google-client-id-not-set}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-google-client-secret-not-set}
-    ports:
-      - "${KEYCLOAK_PORT:-8080}:8080"
+      POSTGRES_USER: ${POSTGRES_USER:-spendly}
+      POSTGRES_DB: ${POSTGRES_DB:-spendly}
+      PGHOST: postgres
+      PGPASSWORD: ${POSTGRES_PASSWORD:-spendly}
     volumes:
-      - ./infra/keycloak:/opt/keycloak/data/import:ro
+      - ./infra/postgres/init-databases.sh:/init-databases.sh:ro
     depends_on:
       postgres:
         condition: service_healthy
-    healthcheck:
-      # The image ships neither curl nor wget, so the probe talks HTTP over bash's
-      # /dev/tcp against the management port. CRLF line endings are required - plain
-      # \n makes Keycloak answer 400.
-      test:
-        - CMD
-        - bash
-        - -c
-        - 'exec 3<>/dev/tcp/127.0.0.1/9000; printf "GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" >&3; grep -q "\"status\": \"UP\"" <&3'
-      interval: 10s
-      timeout: 5s
-      retries: 30
-      start_period: 30s
-    restart: unless-stopped
+    restart: "no"
 
   redis:
     image: redis:8-alpine
@@ -134,25 +136,6 @@ services:
       timeout: 5s
       retries: 20
     restart: unless-stopped
-
-  # One-shot: creates the receipts bucket MinIO needs for FI-18, then exits.
-  minio-init:
-    image: quay.io/minio/mc:latest
-    container_name: spendly-minio-init
-    depends_on:
-      minio:
-        condition: service_healthy
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-spendly}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-spendly-minio}
-    entrypoint: >
-      /bin/sh -c "
-      mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD &&
-      mc mb --ignore-existing local/spendly-receipts &&
-      mc anonymous set none local/spendly-receipts &&
-      echo 'MinIO bucket ready: spendly-receipts'
-      "
-    restart: "no"
 
   # MailHog was archived in 2021 and publishes no arm64 image, so Apple Silicon would
   # emulate it. Mailpit is the maintained drop-in: same job, same SMTP port, nicer UI.
@@ -206,12 +189,80 @@ services:
       start_period: 20s
     restart: unless-stopped
 
+  # Governs the event contracts, it does not carry them: messages stay plain JSON with
+  # spendly-event-* headers, so no producer or consumer links a registry client (FI-45).
+  # The committed schemas are registered from inside this container by register.sh, which
+  # runs beside the registry; a history that breaks BACKWARD compatibility fails the script
+  # and leaves the container unhealthy instead of being skipped.
+  schema-registry:
+    image: confluentinc/cp-schema-registry:8.2.4
+    container_name: spendly-schema-registry
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:19092
+      SCHEMA_REGISTRY_SCHEMA_COMPATIBILITY_LEVEL: backward
+    command: ["bash", "-c", "bash /register.sh & exec /etc/confluent/docker/run"]
+    ports:
+      - "${SCHEMA_REGISTRY_PORT:-8094}:8081"
+    volumes:
+      - ./events/src/main/resources/schemas:/schemas:ro
+      - ./infra/schema-registry/register.sh:/register.sh:ro
+    depends_on:
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/schemas-registered && curl -fsS http://localhost:8081/subjects >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
+
+  # The CDC alternative to the outbox poller (FI-47). Opt-in: `docker compose --profile cdc up -d`
+  # together with SPENDLY_OUTBOX_MODE=cdc. Without the profile and with the mode set to cdc,
+  # nothing publishes outbox_event, so events stop flowing.
+  debezium-connect:
+    image: quay.io/debezium/connect:3.6.3.Final
+    container_name: spendly-debezium-connect
+    profiles: ["cdc"]
+    environment:
+      BOOTSTRAP_SERVERS: kafka:19092
+      GROUP_ID: spendly-connect
+      CONFIG_STORAGE_TOPIC: spendly.connect.configs
+      OFFSET_STORAGE_TOPIC: spendly.connect.offsets
+      STATUS_STORAGE_TOPIC: spendly.connect.statuses
+      CONFIG_STORAGE_REPLICATION_FACTOR: "1"
+      OFFSET_STORAGE_REPLICATION_FACTOR: "1"
+      STATUS_STORAGE_REPLICATION_FACTOR: "1"
+      SPENDLY_DB_HOST: postgres
+      SPENDLY_DB_USER: ${POSTGRES_USER:-spendly}
+      SPENDLY_DB_PASSWORD: ${POSTGRES_PASSWORD:-spendly}
+    command: ["bash", "-c", "bash /debezium/register-connectors.sh & exec /docker-entrypoint.sh start"]
+    ports:
+      - "${DEBEZIUM_CONNECT_PORT:-8095}:8083"
+    volumes:
+      - ./infra/debezium:/debezium:ro
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/connectors-registered && curl -fsS http://localhost:8083/connectors >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    restart: unless-stopped
+
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     container_name: spendly-kafka-ui
     environment:
       KAFKA_CLUSTERS_0_NAME: spendly-local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:19092
+      KAFKA_CLUSTERS_0_SCHEMAREGISTRY: http://schema-registry:8081
       DYNAMIC_CONFIG_ENABLED: "true"
     ports:
       - "${KAFKA_UI_PORT:-8099}:8080"
@@ -279,10 +330,111 @@ services:
       - tempo
     restart: unless-stopped
 
+  # --- Platform ------------------------------------------------------------------------
+  # Eureka, the config server and the gateway. They come up before the domain services, which
+  # wait on their healthchecks.
+
+  discovery-server:
+    build:
+      context: .
+      args:
+        SERVICE: discovery-server
+    image: spendly/discovery-server:local
+    container_name: spendly-discovery-server
+    restart: unless-stopped
+    environment:
+      MANAGEMENT_PORT: 9761
+      SPENDLY_EUREKA_HOSTNAME: discovery-server
+    ports:
+      - "${DISCOVERY_SERVER_PORT:-8761}:8761"
+      - "127.0.0.1:${DISCOVERY_SERVER_MANAGEMENT_PORT:-9761}:9761"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:$${MANAGEMENT_PORT}/actuator/health/readiness"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  config-server:
+    build:
+      context: .
+      args:
+        SERVICE: config-server
+    image: spendly/config-server:local
+    container_name: spendly-config-server
+    restart: unless-stopped
+    environment:
+      MANAGEMENT_PORT: 9888
+      # Seeded from the packaged infra/config-repo on startup and served over file://.
+      SPENDLY_CONFIG_REPO_DIR: /var/spendly/config-repo
+    volumes:
+      - config-repo-data:/var/spendly
+    ports:
+      - "${CONFIG_SERVER_PORT:-8888}:8888"
+      - "127.0.0.1:${CONFIG_SERVER_MANAGEMENT_PORT:-9888}:9888"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:$${MANAGEMENT_PORT}/actuator/health/readiness"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  # The only public entry point (CLAUDE.md 3): routing, JWT validation, CORS, correlation ids
+  # and per-subject rate limiting in Redis. The browser talks to this.
+  api-gateway:
+    <<: *spring-service
+    build:
+      context: .
+      args:
+        SERVICE: api-gateway
+    image: spendly/api-gateway:local
+    container_name: spendly-api-gateway
+    environment:
+      <<: *spring-environment
+      SPENDLY_AUTH_URL: lb://auth-service
+      SPENDLY_USER_URL: lb://user-service
+      SPENDLY_ACCOUNT_URL: lb://account-service
+      SPENDLY_TRANSACTION_URL: lb://transaction-service
+      SPENDLY_BUDGET_URL: lb://budget-service
+      SPENDLY_RECURRING_URL: lb://recurring-service
+      SPENDLY_IMPORT_URL: lb://import-service
+      SPENDLY_ANALYTICS_URL: lb://analytics-service
+      SPENDLY_GOAL_URL: lb://goal-service
+      SPENDLY_NOTIFICATION_URL: lb://notification-service
+      SPENDLY_RATE_LIMIT_PER_MINUTE: ${SPENDLY_RATE_LIMIT_PER_MINUTE:-300}
+      MANAGEMENT_PORT: 9081
+    ports:
+      - "${API_GATEWAY_PORT:-8081}:8081"
+      - "127.0.0.1:${API_GATEWAY_MANAGEMENT_PORT:-9082}:9081"
+
   # --- Application ---------------------------------------------------------------------
   # Built from source by the root Dockerfile (one image per SERVICE build arg) and
   # frontend/Dockerfile. Public ports match the host-run defaults (CLAUDE.md 3), management
   # ports are published on loopback only.
+
+  # Sign-in (password + authenticator app, or Google) and the access tokens everything else validates.
+  auth-service:
+    <<: *spring-service
+    build:
+      context: .
+      args:
+        SERVICE: auth-service
+    image: spendly/auth-service:local
+    container_name: spendly-auth-service
+    environment:
+      <<: *spring-environment
+      SPENDLY_AUTH_DB_URL: jdbc:postgresql://postgres:5432/spendly_auth
+      # Seals TOTP secrets and the signing key at rest. This default is for the local stack only;
+      # set your own (openssl rand -base64 32) anywhere that holds real accounts.
+      SPENDLY_AUTH_ENCRYPTION_KEY: ${SPENDLY_AUTH_ENCRYPTION_KEY:-MzizKO5/kHMGN0FE1dsFVRtlWQjSzDyKXUz9UnvPi0U=}
+      SPENDLY_FRONTEND_URL: http://localhost:${FRONTEND_PORT:-4200}
+      SPENDLY_PUBLIC_URL: http://localhost:${API_GATEWAY_PORT:-8081}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      MANAGEMENT_PORT: 9096
+    ports:
+      - "${AUTH_SERVICE_PORT:-8096}:8096"
+      - "127.0.0.1:${AUTH_SERVICE_MANAGEMENT_PORT:-9096}:9096"
 
   user-service:
     <<: *spring-service
@@ -332,8 +484,174 @@ services:
       - "${TRANSACTION_SERVICE_PORT:-8084}:8084"
       - "127.0.0.1:${TRANSACTION_SERVICE_MANAGEMENT_PORT:-9084}:9084"
 
-  # nginx serving the production Angular bundle. The browser talks to Keycloak and the
-  # services through their published host ports, exactly as with `ng serve`.
+  budget-service:
+    <<: *spring-service
+    build:
+      context: .
+      args:
+        SERVICE: budget-service
+    image: spendly/budget-service:local
+    container_name: spendly-budget-service
+    environment:
+      <<: *spring-environment
+      SPENDLY_BUDGET_DB_URL: jdbc:postgresql://postgres:5432/spendly_budget
+      MANAGEMENT_PORT: 9085
+    ports:
+      - "${BUDGET_SERVICE_PORT:-8085}:8085"
+      - "127.0.0.1:${BUDGET_SERVICE_MANAGEMENT_PORT:-9085}:9085"
+
+  recurring-service:
+    <<: *spring-service
+    build:
+      context: .
+      args:
+        SERVICE: recurring-service
+    image: spendly/recurring-service:local
+    container_name: spendly-recurring-service
+    environment:
+      <<: *spring-environment
+      SPENDLY_RECURRING_DB_URL: jdbc:postgresql://postgres:5432/spendly_recurring
+      MANAGEMENT_PORT: 9087
+    ports:
+      - "${RECURRING_SERVICE_PORT:-8087}:8087"
+      - "127.0.0.1:${RECURRING_SERVICE_MANAGEMENT_PORT:-9087}:9087"
+
+  # Savings goals: round-ups and scheduled contributions, driven by the ledger event stream.
+  goal-service:
+    <<: *spring-service
+    build:
+      context: .
+      args:
+        SERVICE: goal-service
+    image: spendly/goal-service:local
+    container_name: spendly-goal-service
+    environment:
+      <<: *spring-environment
+      SPENDLY_GOAL_DB_URL: jdbc:postgresql://postgres:5432/spendly_goal
+      MANAGEMENT_PORT: 9086
+    ports:
+      - "${GOAL_SERVICE_PORT:-8086}:8086"
+      - "127.0.0.1:${GOAL_SERVICE_MANAGEMENT_PORT:-9086}:9086"
+
+  # Inbox, email and web push. Mail goes to Mailpit locally; the management port is 9191
+  # because 9091 already belongs to user-service, which predates the port rule.
+  notification-service:
+    <<: *spring-service
+    build:
+      context: .
+      args:
+        SERVICE: notification-service
+    image: spendly/notification-service:local
+    container_name: spendly-notification-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      databases:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+    environment:
+      <<: *spring-environment
+      SPENDLY_NOTIFICATION_DB_URL: jdbc:postgresql://postgres:5432/spendly_notification
+      SPENDLY_SMTP_HOST: mailpit
+      SPENDLY_SMTP_PORT: "1025"
+      SPENDLY_PUBLIC_URL: http://localhost:${FRONTEND_PORT:-4200}
+      SPENDLY_VAPID_PUBLIC_KEY: ${SPENDLY_VAPID_PUBLIC_KEY:-}
+      SPENDLY_VAPID_PRIVATE_KEY: ${SPENDLY_VAPID_PRIVATE_KEY:-}
+      MANAGEMENT_PORT: 9191
+    ports:
+      - "${NOTIFICATION_SERVICE_PORT:-8091}:8091"
+      - "127.0.0.1:${NOTIFICATION_SERVICE_MANAGEMENT_PORT:-9191}:9191"
+
+  # Receipts go straight from the browser to MinIO through presigned URLs, so the public
+  # storage endpoint is the host-facing MinIO port while the service itself talks to minio:9000.
+  import-service:
+    <<: *spring-service
+    build:
+      context: .
+      args:
+        SERVICE: import-service
+    image: spendly/import-service:local
+    container_name: spendly-import-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      databases:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      <<: *spring-environment
+      SPENDLY_IMPORT_DB_URL: jdbc:postgresql://postgres:5432/spendly_import
+      SPENDLY_STORAGE_ENDPOINT: http://minio:9000
+      SPENDLY_STORAGE_PUBLIC_ENDPOINT: http://localhost:${MINIO_API_PORT:-9000}
+      SPENDLY_STORAGE_ACCESS_KEY: ${MINIO_ROOT_USER:-spendly}
+      SPENDLY_STORAGE_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-spendly-minio}
+      MANAGEMENT_PORT: 9088
+    ports:
+      - "${IMPORT_SERVICE_PORT:-8088}:8088"
+      - "127.0.0.1:${IMPORT_SERVICE_MANAGEMENT_PORT:-9088}:9088"
+
+  # The read side (CLAUDE.md 6.8): one call that answers the dashboard, fanning out to the
+  # domain services behind Resilience4j, and serves the insights from a read model it builds from
+  # the ledger event stream in its own database.
+  analytics-service:
+    <<: *spring-service
+    build:
+      context: .
+      args:
+        SERVICE: analytics-service
+    image: spendly/analytics-service:local
+    container_name: spendly-analytics-service
+    environment:
+      <<: *spring-environment
+      SPENDLY_ANALYTICS_DB_URL: jdbc:postgresql://postgres:5432/spendly_analytics
+      # lb:// resolves through Eureka with client-side load balancing (FI-34/FI-35); the
+      # compose DNS name still works and is what a host-run analytics-service uses.
+      SPENDLY_ACCOUNT_URL: lb://account-service
+      SPENDLY_BUDGET_URL: lb://budget-service
+      SPENDLY_RECURRING_URL: lb://recurring-service
+      SPENDLY_TRANSACTION_URL: lb://transaction-service
+      MANAGEMENT_PORT: 9090
+    ports:
+      - "${ANALYTICS_SERVICE_PORT:-8090}:8090"
+      - "127.0.0.1:${ANALYTICS_SERVICE_MANAGEMENT_PORT:-9089}:9090"
+
+  # Shared-expense groups, invitations by link, the split engine and debt simplification.
+  sharing-service:
+    <<: *spring-service
+    build:
+      context: .
+      args:
+        SERVICE: sharing-service
+    image: spendly/sharing-service:local
+    container_name: spendly-sharing-service
+    environment:
+      <<: *spring-environment
+      SPENDLY_SHARING_DB_URL: jdbc:postgresql://postgres:5432/spendly_sharing
+      MANAGEMENT_PORT: 9093
+    ports:
+      - "${SHARING_SERVICE_PORT:-8093}:8093"
+      - "127.0.0.1:${SHARING_SERVICE_MANAGEMENT_PORT:-9093}:9093"
+
+  # nginx serving the production Angular bundle. The browser talks to the gateway
+  # through its published host port, exactly as with `ng serve`.
   frontend:
     build: ./frontend
     image: spendly/frontend:local
@@ -341,6 +659,8 @@ services:
     ports:
       - "${FRONTEND_PORT:-4200}:80"
     depends_on:
+      api-gateway:
+        condition: service_healthy
       user-service:
         condition: service_healthy
     healthcheck:
@@ -352,6 +672,7 @@ services:
 
 volumes:
   postgres-data:
+  config-repo-data:
   redis-data:
   minio-data:
   kafka-data:

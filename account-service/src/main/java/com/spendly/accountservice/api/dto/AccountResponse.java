@@ -16,6 +16,8 @@ public record AccountResponse(
         @Schema(description = "ISO-4217 code", example = "EUR", requiredMode = RequiredMode.REQUIRED) String currency,
         @Schema(description = "Running balance derived from the ledger", requiredMode = RequiredMode.REQUIRED) Money balance,
         @Schema(description = "Set once the account is archived; archived accounts take no new postings") @Nullable Instant archivedAt,
+        @Schema(description = "Subject of the owner", requiredMode = RequiredMode.REQUIRED) UUID ownerId,
+        @Schema(description = "Set while the account is shared with a household; its members read it, only the owner changes it") @Nullable UUID householdId,
         @Schema(requiredMode = RequiredMode.REQUIRED) Instant createdAt,
         @Schema(requiredMode = RequiredMode.REQUIRED) long version) {
 }

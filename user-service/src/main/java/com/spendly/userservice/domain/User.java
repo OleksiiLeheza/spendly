@@ -22,7 +22,7 @@ import org.jspecify.annotations.Nullable;
 public class User extends BaseEntityAudit {
 
     @Column(name = "keycloak_id", nullable = false, updatable = false, unique = true)
-    private UUID keycloakId;
+    private UUID subject;
 
     @Column(name = "email", nullable = false, unique = true, length = 320)
     private String email;

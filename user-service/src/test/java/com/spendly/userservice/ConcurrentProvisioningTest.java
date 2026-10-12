@@ -76,7 +76,9 @@ class ConcurrentProvisioningTest extends AbstractIntegrationTest {
 
         assertThat(ids).hasSize(callers).doesNotContainNull();
         assertThat(Set.copyOf(ids)).as("every caller must see the same row").hasSize(1);
-        assertThat(users.findAll()).extracting(User::getKeycloakId).containsExactly(subject);
+        // The invariant is one row per identity, not one row in the table: other tests (and the
+        // demo dataset) legitimately leave their own identities behind.
+        assertThat(users.findAll()).extracting(User::getSubject).filteredOn(subject::equals).hasSize(1);
     }
 
     @Test
@@ -93,7 +95,7 @@ class ConcurrentProvisioningTest extends AbstractIntegrationTest {
 
     private static CurrentUserPrincipal principalFor(UUID subject) {
         return new CurrentUserPrincipal(subject, subject.toString(), subject + "@example.test", "tester",
-                Set.of("USER"));
+                Set.of("USER"), Set.of(), null);
     }
 
     private static JwtAuthenticationToken authenticationFor(UUID subject) {

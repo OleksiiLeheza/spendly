@@ -1,5 +1,8 @@
 # Testcontainers supplies the datasource via @ServiceConnection, so no URL here.
 spring:
+  cloud:
+    config:
+      enabled: false
   jpa:
     hibernate:
       ddl-auto: validate
@@ -9,9 +12,17 @@ spring:
         jwt:
           # Never reached: these tests do not perform a real login, but the resource-server
           # auto-configuration still needs an issuer to start.
-          issuer-uri: http://localhost:8080/realms/spendly
+          issuer-uri: http://localhost:8096
 
 spendly:
+  kafka:
+    retry:
+      initial-delay: PT1S
+      multiplier: 3
+      max-delay: PT3S
+  # Integration tests assert on the rows they create themselves.
+  demo-data:
+    enabled: false
   cors:
     allowed-origins: http://localhost:4200
 
@@ -19,3 +30,7 @@ logging:
   level:
     org.testcontainers: WARN
     com.github.dockerjava: WARN
+
+eureka:
+  client:
+    enabled: false

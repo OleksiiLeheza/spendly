@@ -1,82 +1,65 @@
-import { test, expect } from '@playwright/test';
-
-const KEYCLOAK = process.env['E2E_KEYCLOAK_URL'] ?? 'http://localhost:8080';
-const API = process.env['E2E_API_URL'] ?? 'http://localhost:8082';
+import type { Page } from '@playwright/test';
+import { test, expect } from './fixtures';
+import { NEEDS_STACK, stackIsUp } from './stack';
 
 /**
- * The whole journey: Angular -> Keycloak login -> code exchange -> authenticated API call.
- *
- * <p>Needs the Docker stack and user-service running, so it skips itself otherwise.
+ * The whole journey: Angular -> auth-service sign-in -> access token -> authenticated calls
+ * through the gateway, with the session kept in an HttpOnly cookie.
  */
-test.describe('signing in with email and password', () => {
-  // Both journeys sign in as the same seeded user; run them one after another so two
-  // simultaneous logins never race each other in Keycloak's session handling.
-  test.describe.configure({ mode: 'serial' });
+async function signIn(page: Page, email: string, password: string): Promise<void> {
+  await page.goto('/login');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+}
 
+test.describe('signing in with email and password', () => {
   test.beforeEach(async () => {
-    const [kc, api] = await Promise.all([
-      fetch(`${KEYCLOAK}/realms/spendly/.well-known/openid-configuration`)
-        .then((r) => r.ok)
-        .catch(() => false),
-      fetch(`${API.replace('8082', '9091')}/actuator/health`)
-        .then((r) => r.ok)
-        .catch(() => false),
-    ]);
-    test.skip(!kc || !api, 'Needs the Docker stack and user-service running');
+    test.skip(!(await stackIsUp()), NEEDS_STACK);
   });
 
   test('lands on the dashboard with a profile loaded from the API', async ({ page }) => {
-    await page.goto('/login');
-    await page.getByRole('button', { name: 'Sign in with email' }).click();
-
-    await page.waitForURL(/\/realms\/spendly\/protocol\/openid-connect\/auth/);
-    await page.locator('#kc-form-login').waitFor();
-    await page.locator('#username').fill('dev@spendly.local');
-    await page.locator('#password').fill('dev');
-    await page.locator('#kc-login').click();
+    await signIn(page, 'dev@spendly.local', 'dev');
 
     await page.waitForURL(/\/dashboard$/, { timeout: 20_000 });
 
-    await expect(page.getByText('Signed in as dev@spendly.local')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
 
-    // A rendered profile id proves the API call succeeded with a real bearer token, not
-    // merely that the redirect finished. It must also be the time-ordered UUIDv7 the
-    // backend generates - the version nibble is the '7' opening the third group.
-    await expect(
-      page.getByText(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/),
-    ).toBeVisible();
-
-    await expect(page.getByText('Default currency')).toBeVisible();
-    await expect(page.locator('mat-chip').filter({ hasText: 'USER' })).toBeVisible();
+    // The overview only renders once its authenticated calls to account-, budget-,
+    // recurring- and transaction-service have resolved, so these four cards prove the
+    // bearer token was accepted across the whole back end, not merely that the form posted.
+    for (const card of ['Balances', 'Spent this month', 'Due in 30 days', 'Needs attention']) {
+      await expect(page.getByText(card, { exact: true })).toBeVisible();
+    }
   });
 
   test('the seeded administrator signs in with the ADMIN role', async ({ page }) => {
-    await page.goto('/login');
-    await page.getByRole('button', { name: 'Sign in with email' }).click();
-    await page.locator('#kc-form-login').waitFor();
-    await page.locator('#username').fill('admin@gmail.com');
-    await page.locator('#password').fill('admin');
-    await page.locator('#kc-login').click();
+    await signIn(page, 'admin@gmail.com', 'admin');
 
+    await page.waitForURL(/\/(dashboard|onboarding\/account)$/, { timeout: 20_000 });
+
+    await page.goto('/settings');
+    await expect(page.getByText('Developer tools')).toBeVisible();
+  });
+
+  test('a reload keeps the person signed in through the session cookie', async ({ page }) => {
+    await signIn(page, 'dev@spendly.local', 'dev');
     await page.waitForURL(/\/dashboard$/, { timeout: 20_000 });
 
-    await expect(page.getByText('Signed in as admin@gmail.com')).toBeVisible();
-    await expect(page.locator('mat-chip').filter({ hasText: 'ADMIN' })).toBeVisible();
+    await page.reload();
+
+    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
   });
 
   test('signing out returns the user to the login page', async ({ page }) => {
-    await page.goto('/login');
-    await page.getByRole('button', { name: 'Sign in with email' }).click();
-    await page.waitForURL(/\/realms\/spendly/);
-    await page.locator('#kc-form-login').waitFor();
-    await page.locator('#username').fill('dev@spendly.local');
-    await page.locator('#password').fill('dev');
-    await page.locator('#kc-login').click();
+    await signIn(page, 'dev@spendly.local', 'dev');
     await page.waitForURL(/\/dashboard$/, { timeout: 20_000 });
 
     await page.getByRole('button', { name: 'Sign out' }).click();
 
-    await page.waitForURL(/localhost:4200\/(login)?$/, { timeout: 20_000 });
+    await page.waitForURL(/\/login$/, { timeout: 20_000 });
     await page.goto('/dashboard');
     await expect(page).toHaveURL(/\/login$/);
   });

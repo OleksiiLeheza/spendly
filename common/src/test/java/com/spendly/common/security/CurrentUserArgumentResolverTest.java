@@ -36,6 +36,8 @@ class CurrentUserArgumentResolverTest {
         assertThat(principal.roles()).isEmpty();
         assertThat(principal.email()).isNull();
         assertThat(principal.username()).isNull();
+        assertThat(principal.households()).isEmpty();
+        assertThat(principal.authenticatedAt()).isNull();
     }
 
     @Test
@@ -46,6 +48,22 @@ class CurrentUserArgumentResolverTest {
 
         assertThat(first).isEqualTo(second);
         assertThat(first).isNotEqualTo(CurrentUserArgumentResolver.from(jwt("999", Map.of())).id());
+    }
+
+    @Test
+    void readsHouseholdsAndAuthTimeWhenPresent() {
+        UUID household = UUID.randomUUID();
+        Instant authTime = Instant.now().minusSeconds(60).truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+        CurrentUserPrincipal principal = CurrentUserArgumentResolver.from(jwt(SUBJECT,
+                Map.of(
+                        "households", List.of(household.toString(), "/" + UUID.randomUUID(), "not-a-uuid"),
+                        "auth_time", authTime.getEpochSecond())));
+
+        assertThat(principal.households()).hasSize(2).contains(household);
+        assertThat(principal.isMemberOf(household)).isTrue();
+        assertThat(principal.isMemberOf(UUID.randomUUID())).isFalse();
+        assertThat(principal.isMemberOf(null)).isFalse();
+        assertThat(principal.authenticatedAt()).isEqualTo(authTime);
     }
 
     @Test

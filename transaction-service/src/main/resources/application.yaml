@@ -11,6 +11,11 @@ spring:
     virtual:
       enabled: true
 
+  config:
+    # Centrally tuned values come from config-server when it is up (infra/config-repo);
+    # without it the packaged defaults apply and startup is unaffected.
+    import: "optional:configserver:${SPENDLY_CONFIG_SERVER_URL:http://localhost:8888}"
+
   datasource:
     url: ${SPENDLY_TRANSACTION_DB_URL:jdbc:postgresql://localhost:5432/spendly_transaction}
     username: ${SPENDLY_DB_USER}
@@ -43,28 +48,78 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: false
 
+  kafka:
+    bootstrap-servers: ${SPENDLY_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    admin:
+      # The event topics keep every record, so a read model can be rebuilt by replaying one; this applies
+      # that retention to a topic that already existed with the broker default.
+      modify-topic-configs: true
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+    consumer:
+      group-id: transaction-service
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+    listener:
+      ack-mode: record
+
   security:
     oauth2:
       resourceserver:
         jwt:
           issuer-uri: ${SPENDLY_OIDC_ISSUER}
-          # Set only inside docker compose, where the container cannot reach the issuer's
-          # localhost:8080 but the browser's tokens still carry it as `iss`. With both
-          # properties present Boot fetches keys from jwk-set-uri and keeps validating the
-          # iss claim against issuer-uri; an empty value leaves issuer discovery in place.
-          jwk-set-uri: ${SPENDLY_OIDC_JWK_SET_URI:}
+          # The signing keys come from auth-service's JWKS, never from OIDC discovery (it serves none);
+          # the issuer is the name `iss` must equal, and SPENDLY_OIDC_ISSUER is the one value auth-service signs with.
+          jwk-set-uri: ${SPENDLY_OIDC_JWK_SET_URI:http://localhost:8096/.well-known/jwks.json}
           audiences:
             - spendly-api
 
 server:
   port: ${SERVER_PORT:8084}
+  # Behind the gateway, Location headers must name the gateway, not this container.
+  forward-headers-strategy: framework
   error:
     include-message: never
     include-stacktrace: never
 
 spendly:
+  # Seeds the demo dataset for dev@spendly.local on startup: common.demo.DemoData defines it,
+  # each service's demo.TestDataGenerator writes its own slice. Idempotent, and forced off in
+  # every deployed profile below. See common.demo.DemoDataProperties.
+  demo-data:
+    enabled: ${SPENDLY_DEMO_DATA:true}
+    # Wipe this owner's demo rows before seeding, so a reshaped dataset replaces the old one.
+    reset: ${SPENDLY_DEMO_DATA_RESET:false}
+    # How many months of history to generate, ending with the current month.
+    months: ${SPENDLY_DEMO_DATA_MONTHS:4}
+    # Percentage applied to every seeded amount: 100 is as written, 250 is two and a half times.
+    scale-percent: ${SPENDLY_DEMO_DATA_SCALE:100}
   cors:
     allowed-origins: ${SPENDLY_CORS_ORIGINS:http://localhost:4200}
+  dead-letters:
+    enabled: true
+  outbox:
+    mode: ${SPENDLY_OUTBOX_MODE:poller}
+    # The relay polls outbox_event with SKIP LOCKED and ships rows to Kafka (CLAUDE.md 6.5).
+    poll-interval: PT1S
+
+eureka:
+  client:
+    # On by default in compose (SPENDLY_EUREKA_ENABLED); a service started from the IDE
+    # is reachable by DNS/localhost and need not register.
+    enabled: ${SPENDLY_EUREKA_ENABLED:false}
+    service-url:
+      defaultZone: ${SPENDLY_EUREKA_URL:http://localhost:8761/eureka/}
+  instance:
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
 
 springdoc:
   api-docs:
@@ -80,7 +135,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,prometheus
+        include: health,info,prometheus,refresh
   endpoint:
     health:
       probes:
@@ -115,3 +170,7 @@ logging:
   structured:
     format:
       console: ecs
+
+spendly:
+  demo-data:
+    enabled: false

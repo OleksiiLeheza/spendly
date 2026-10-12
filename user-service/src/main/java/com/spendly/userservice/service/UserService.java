@@ -16,22 +16,24 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserService {
 
     private final UserRepository users;
+    private final UserEvents events;
 
-    public UserService(UserRepository users) {
+    public UserService(UserRepository users, UserEvents events) {
         this.users = users;
+        this.events = events;
     }
 
-    @PreAuthorize("isAuthenticated() and #keycloakId.toString() == authentication.token.subject")
-    public User getByKeycloakId(UUID keycloakId) {
-        return users.findActiveByKeycloakId(keycloakId)
-                .orElseThrow(() -> new ApiException.NotFound("User", keycloakId));
+    @PreAuthorize("isAuthenticated() and #subject.toString() == authentication.token.subject")
+    public User getBySubject(UUID subject) {
+        return users.findActiveBySubject(subject)
+                .orElseThrow(() -> new ApiException.NotFound("User", subject));
     }
 
     @Transactional
-    @PreAuthorize("isAuthenticated() and #keycloakId.toString() == authentication.token.subject")
-    public User updateProfile(UUID keycloakId, ProfileUpdate update) {
-        User user = users.findActiveByKeycloakId(keycloakId)
-                .orElseThrow(() -> new ApiException.NotFound("User", keycloakId));
+    @PreAuthorize("isAuthenticated() and #subject.toString() == authentication.token.subject")
+    public User updateProfile(UUID subject, ProfileUpdate update) {
+        User user = users.findActiveBySubject(subject)
+                .orElseThrow(() -> new ApiException.NotFound("User", subject));
 
         if (update.firstName() != null) {
             user.setFirstName(blankToNull(update.firstName()));
@@ -51,6 +53,7 @@ public class UserService {
         if (update.defaultCurrency() != null) {
             user.setDefaultCurrency(validCurrency(update.defaultCurrency()));
         }
+        events.profileChanged(user);
         return user;
     }
 

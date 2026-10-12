@@ -201,6 +201,65 @@ class MoneyTest {
         }
     }
 
+    @Nested
+    @DisplayName("weighted allocate")
+    class WeightedAllocate {
+
+        @Test
+        void splitsProportionallyWithoutLosingACent() {
+            List<Money> shares = Money.of("100.00", "USD").allocate(List.of(60L, 40L));
+            assertThat(shares).containsExactly(Money.of("60.00", "USD"), Money.of("40.00", "USD"));
+        }
+
+        @Test
+        void spreadsTheRemainderOverTheMostCutShares() {
+            List<Money> shares = Money.of("10.00", "USD").allocate(List.of(1L, 1L, 1L));
+            assertThat(sum(shares)).isEqualTo(Money.of("10.00", "USD"));
+            assertThat(shares)
+                    .containsExactly(Money.of("3.34", "USD"), Money.of("3.33", "USD"), Money.of("3.33", "USD"));
+        }
+
+        @Test
+        void equalWeightsMatchAllocateByPartCount() {
+            assertThat(Money.of("10.00", "USD").allocate(List.of(1L, 1L, 1L)))
+                    .isEqualTo(Money.of("10.00", "USD").allocate(3));
+        }
+
+        @Test
+        void oneNonZeroWeightTakesEverything() {
+            List<Money> shares = Money.of("10.00", "USD").allocate(List.of(0L, 5L, 0L));
+            assertThat(shares).containsExactly(Money.zero("USD"), Money.of("10.00", "USD"), Money.zero("USD"));
+        }
+
+        @Test
+        void rejectsAllZeroWeights() {
+            assertThatThrownBy(() -> Money.of("10.00", "USD").allocate(List.of(0L, 0L)))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        void rejectsANegativeWeight() {
+            assertThatThrownBy(() -> Money.of("10.00", "USD").allocate(List.of(1L, -1L)))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        void rejectsAnEmptyWeightList() {
+            assertThatThrownBy(() -> Money.of("10.00", "USD").allocate(List.of()))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        void splitsNegativeAmountsWithoutLosingACent() {
+            List<Money> shares = Money.of("-10.00", "USD").allocate(List.of(1L, 1L, 1L));
+            assertThat(sum(shares)).isEqualTo(Money.of("-10.00", "USD"));
+        }
+
+        private static Money sum(List<Money> shares) {
+            return shares.stream().reduce(Money.zero("USD"), Money::plus);
+        }
+    }
+
     @Test
     void rendersCurrencyFirst() {
         assertThat(Money.of("10.50", "USD")).hasToString("USD 10.50");

@@ -21,6 +21,7 @@ import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.Locale;
 import java.util.UUID;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -33,7 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 @RestController
-@RequestMapping("/api/v1/categories")
+@RequestMapping(value = "/api/v1/categories", produces = MediaType.APPLICATION_JSON_VALUE)
 @Tag(name = "Categories", description = "The caller's category tree. Defaults are seeded in the caller's language on first use.")
 @SecurityRequirement(name = "bearer-jwt")
 public class CategoryController {
@@ -46,8 +47,8 @@ public class CategoryController {
         this.mapper = mapper;
     }
 
-    @GetMapping
-    @Operation(summary = "The whole tree", description = "On the caller's first call the defaults are seeded from the Accept-Language header (en, uk).")
+    @GetMapping(version = "v1")
+    @Operation(operationId = "listCategories", summary = "The whole tree, nested", description = "On the caller's first call the defaults are seeded from the Accept-Language header (en, uk). Version 2 of this endpoint returns the same categories as one ordered list.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "The tree"),
             @ApiResponse(responseCode = "401", description = "Missing or invalid access token", content = {})
@@ -60,7 +61,7 @@ public class CategoryController {
     }
 
     @PostMapping
-    @Operation(summary = "Create a category")
+    @Operation(operationId = "createCategory", summary = "Create a category")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "The new category"),
             @ApiResponse(responseCode = "400", description = "Validation failed", content = {}),
@@ -80,7 +81,7 @@ public class CategoryController {
     }
 
     @GetMapping("/{categoryId}")
-    @Operation(summary = "Get one category")
+    @Operation(operationId = "getCategory", summary = "Get one category")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "The category"),
             @ApiResponse(responseCode = "401", description = "Missing or invalid access token", content = {}),
@@ -91,7 +92,7 @@ public class CategoryController {
     }
 
     @PatchMapping("/{categoryId}")
-    @Operation(summary = "Rename, re-icon, reorder or move a category")
+    @Operation(operationId = "updateCategory", summary = "Rename, re-icon, reorder or move a category")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "The updated category"),
             @ApiResponse(responseCode = "400", description = "Validation failed", content = {}),
@@ -108,7 +109,7 @@ public class CategoryController {
     }
 
     @PostMapping("/{categoryId}/archive")
-    @Operation(summary = "Archive a category and its children", description = "Existing entries keep the label; new ones cannot use it. Idempotent.")
+    @Operation(operationId = "archiveCategory", summary = "Archive a category and its children", description = "Existing entries keep the label; new ones cannot use it. Idempotent.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "The archived category"),
             @ApiResponse(responseCode = "401", description = "Missing or invalid access token", content = {}),
@@ -119,7 +120,7 @@ public class CategoryController {
     }
 
     @PostMapping("/{categoryId}/merge")
-    @Operation(summary = "Merge this category into another", description = "Relabels every entry and split, moves the children under the target, then archives this category.")
+    @Operation(operationId = "mergeCategory", summary = "Merge this category into another", description = "Relabels every entry and split, moves the children under the target, then archives this category.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "What moved"),
             @ApiResponse(responseCode = "401", description = "Missing or invalid access token", content = {}),

@@ -56,7 +56,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         } else {
             log.debug("Request rejected: {}", ex.getMessage());
         }
-        return ResponseEntity.status(ex.status()).body(problem);
+        return ResponseEntity.status(ex.status()).headers(ex.headers()).body(problem);
     }
 
     @ExceptionHandler(AccessDeniedException.class)

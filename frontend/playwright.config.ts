@@ -4,7 +4,7 @@ import { defineConfig, devices } from '@playwright/test';
  * End-to-end tests (FI-11).
  *
  * <p>These drive a real browser against the dev server. The full login journey additionally
- * needs the Docker stack running, so those specs skip themselves when Keycloak is not up
+ * needs the Docker stack running, so those specs skip themselves when the stack is not up
  * rather than failing a machine that only wants unit tests.
  */
 export default defineConfig({

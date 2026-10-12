@@ -13,9 +13,20 @@ scrape_configs:
     metrics_path: /actuator/prometheus
     static_configs:
       - targets:
+          - 'auth-service:9096'
           - 'user-service:9091'
           - 'account-service:9083'
           - 'transaction-service:9084'
+          - 'budget-service:9085'
+          - 'recurring-service:9087'
+          - 'goal-service:9086'
+          - 'notification-service:9191'
+          - 'import-service:9088'
+          - 'analytics-service:9090'
+          - 'sharing-service:9093'
+          - 'api-gateway:9081'
+          - 'discovery-server:9761'
+          - 'config-server:9888'
         labels:
           stack: spendly
 

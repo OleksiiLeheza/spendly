@@ -3,7 +3,7 @@ import { patchState, signalStore, withComputed, withMethods, withState } from '@
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
 import { pipe, switchMap, tap } from 'rxjs';
 import { catchError, of } from 'rxjs';
-import { UserResponse, UsersApi } from '../../../core/api-client';
+import { UserResponse, UsersApi } from '../../../core/api/user';
 
 interface ProfileState {
   profile: UserResponse | null;

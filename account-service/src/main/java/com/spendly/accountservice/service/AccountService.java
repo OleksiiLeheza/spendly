@@ -4,6 +4,7 @@ import com.spendly.accountservice.domain.Account;
 import com.spendly.accountservice.repository.AccountRepository;
 import com.spendly.accountservice.repository.PostingRepository;
 import com.spendly.common.money.Money;
+import com.spendly.common.security.CurrentUserPrincipal;
 import com.spendly.common.web.ApiException;
 import java.time.Clock;
 import java.util.Currency;
@@ -41,23 +42,50 @@ public class AccountService {
         return accounts.save(account);
     }
 
-    public Page<Account> list(UUID ownerId, boolean includeArchived, Pageable pageable) {
-        return accounts.findAllOwned(ownerId, includeArchived, pageable);
+    public Page<Account> list(CurrentUserPrincipal caller, boolean includeArchived, Pageable pageable) {
+        return accounts.findAllAccessible(caller.id(), caller.households(), includeArchived, pageable);
     }
 
     public Account get(UUID ownerId, UUID accountId) {
-        return accounts.findOwned(ownerId, accountId)
+        return owned(ownerId, accountId);
+    }
+
+    @PreAuthorize("hasPermission(#accountId, 'Account', 'read')")
+    public Account get(CurrentUserPrincipal caller, UUID accountId) {
+        return accounts.findAccessible(caller.id(), caller.households(), accountId)
                 .orElseThrow(() -> new ApiException.NotFound("Account", accountId));
     }
 
     @Transactional
+    @PreAuthorize("hasPermission(#accountId, 'Account', 'write')")
     public Account archive(UUID ownerId, UUID accountId) {
-        Account account = get(ownerId, accountId);
+        Account account = owned(ownerId, accountId);
         account.archive(clock.instant());
         return account;
     }
 
     @Transactional
+    @PreAuthorize("hasPermission(#accountId, 'Account', 'write')")
+    public Account share(CurrentUserPrincipal caller, UUID accountId, UUID householdId) {
+        if (!caller.isMemberOf(householdId)) {
+            throw new ApiException.Unprocessable(
+                    "You are not a member of household " + householdId + " (or your token predates joining it)");
+        }
+        Account account = owned(caller.id(), accountId);
+        account.shareWith(householdId);
+        return account;
+    }
+
+    @Transactional
+    @PreAuthorize("hasPermission(#accountId, 'Account', 'write')")
+    public Account unshare(UUID ownerId, UUID accountId) {
+        Account account = owned(ownerId, accountId);
+        account.unshare();
+        return account;
+    }
+
+    @Transactional
+    @PreAuthorize("hasPermission(#accountId, 'Account', 'write')")
     public BalanceReconciliation reconcile(UUID ownerId, UUID accountId) {
         Account account = accounts.findOwnedForUpdate(ownerId, accountId)
                 .orElseThrow(() -> new ApiException.NotFound("Account", accountId));
@@ -73,6 +101,11 @@ public class AccountService {
             account.replaceBalance(replayed);
         }
         return result;
+    }
+
+    private Account owned(UUID ownerId, UUID accountId) {
+        return accounts.findOwned(ownerId, accountId)
+                .orElseThrow(() -> new ApiException.NotFound("Account", accountId));
     }
 
     private static Currency currency(String code) {

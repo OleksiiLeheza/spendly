@@ -10,10 +10,11 @@
       browser holds the access token in memory and sends it in an Authorization header
       (CLAUDE.md 8). There is no cookie or other ambient credential for a cross-site request
       to ride on, which is the only thing CSRF tokens defend against. Re-enable this the day
-      any endpoint starts accepting cookie authentication.
+      any endpoint starts accepting cookie authentication. The api-gateway is the same kind of
+      resource server (CLAUDE.md 6.25): it validates the bearer token and relays it.
     -->
     <Match>
-        <Class name="~com\.spendly\.[a-z]+service\.config\.SecurityConfig"/>
+        <Class name="~com\.spendly\.([a-z]+service|apigateway)\.config\.SecurityConfig"/>
         <Bug pattern="SPRING_CSRF_PROTECTION_DISABLED"/>
     </Match>
 
@@ -120,7 +121,23 @@
             <Package name="~com\.spendly\..*\.api"/>
             <Package name="~com\.spendly\..*\.config"/>
             <Package name="~com\.spendly\.common\.autoconfigure"/>
+            <Package name="~com\.spendly\.common\.messaging"/>
+            <Package name="~com\.spendly\..*\.messaging"/>
+            <Package name="~com\.spendly\..*\.storage"/>
+            <Package name="~com\.spendly\.apigateway\.ratelimit"/>
+            <Class name="com.spendly.common.web.OptimisticLockAdvice"/>
         </Or>
+    </Match>
+
+    <!--
+      The demo generators write with JdbcClient because the whole point is an explicit,
+      deterministic id, which Hibernate's @UuidGenerator would overwrite. Every statement is a
+      constant string with bind parameters; the only interpolation is a table name from a
+      literal in the same class.
+    -->
+    <Match>
+        <Package name="~com\.spendly\..*\.demo"/>
+        <Bug pattern="SQL_INJECTION_SPRING_JDBC,SQL_NONCONSTANT_STRING_PASSED_TO_EXECUTE,EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
     </Match>
 
 </FindBugsFilter>

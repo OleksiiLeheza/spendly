@@ -1,7 +1,9 @@
 package com.spendly.common.web;
 
 import java.net.URI;
+import java.time.Duration;
 import org.jspecify.annotations.Nullable;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 
@@ -42,6 +44,10 @@ public class ApiException extends RuntimeException {
         return title;
     }
 
+    public HttpHeaders headers() {
+        return new HttpHeaders();
+    }
+
     /** The request was understood but names something that does not exist. */
     public static class NotFound extends ApiException {
         public NotFound(String resource, Object id) {
@@ -75,6 +81,34 @@ public class ApiException extends RuntimeException {
         }
     }
 
+    public static class StepUpRequired extends ApiException {
+
+        private final Duration maxAge;
+
+        public StepUpRequired(Duration maxAge) {
+            super(
+                    HttpStatus.UNAUTHORIZED,
+                    URI.create("https://spendly.dev/problems/step-up-required"),
+                    "Recent authentication required",
+                    "Moving money requires an authentication no older than " + maxAge.toMinutes()
+                            + " minutes; sign in again and retry");
+            this.maxAge = maxAge;
+        }
+
+        public Duration maxAge() {
+            return maxAge;
+        }
+
+        @Override
+        public HttpHeaders headers() {
+            HttpHeaders headers = new HttpHeaders();
+            headers.set(HttpHeaders.WWW_AUTHENTICATE,
+                    "Bearer error=\"insufficient_user_authentication\", error_description=\"A recent authentication is required\", max_age=\""
+                            + maxAge.toSeconds() + "\"");
+            return headers;
+        }
+    }
+
     /** The request is well-formed but breaks a domain rule. */
     public static class Unprocessable extends ApiException {
         public Unprocessable(String detail) {
@@ -82,6 +116,17 @@ public class ApiException extends RuntimeException {
                     HttpStatus.UNPROCESSABLE_ENTITY,
                     URI.create("https://spendly.dev/problems/unprocessable"),
                     "Unprocessable request",
+                    detail);
+        }
+    }
+
+    /** A dependency this request needs, such as the broker, did not answer in time. */
+    public static class Unavailable extends ApiException {
+        public Unavailable(String detail) {
+            super(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    URI.create("https://spendly.dev/problems/unavailable"),
+                    "Dependency unavailable",
                     detail);
         }
     }

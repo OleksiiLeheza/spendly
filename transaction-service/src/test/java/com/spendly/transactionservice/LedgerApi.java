@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.jayway.jsonpath.JsonPath;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -37,7 +38,7 @@ final class LedgerApi {
         return UUID.fromString(ids.getFirst());
     }
 
-    UUID createCategory(UUID owner, String name, String kind, UUID parentId) throws Exception {
+    UUID createCategory(UUID owner, String name, String kind, @Nullable UUID parentId) throws Exception {
         String parent = parentId == null ? "null" : "\"" + parentId + "\"";
         String body = mvc.perform(post("/api/v1/categories")
                 .with(asOwner(owner))

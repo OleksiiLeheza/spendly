@@ -26,10 +26,14 @@ class LayeringTest {
                 .definedBy("com.spendly.transactionservice.repository..")
                 .layer("domain")
                 .definedBy("com.spendly.transactionservice.domain..")
+                .layer("messaging")
+                .definedBy("com.spendly.transactionservice.messaging..")
                 .whereLayer("api")
                 .mayNotBeAccessedByAnyLayer()
+                .whereLayer("messaging")
+                .mayNotBeAccessedByAnyLayer()
                 .whereLayer("service")
-                .mayOnlyBeAccessedByLayers("api")
+                .mayOnlyBeAccessedByLayers("api", "messaging")
                 .whereLayer("repository")
                 .mayOnlyBeAccessedByLayers("service");
 
@@ -96,7 +100,7 @@ class LayeringTest {
                 .resideInAPackage("com.spendly.transactionservice.domain..")
                 .should()
                 .haveNameMatching("(?i).*(password|secret|credential|passwordHash).*")
-                .because("Spendly never stores credentials; Keycloak owns them (CLAUDE.md 8)");
+                .because("Only auth-service stores credentials (CLAUDE.md 8)");
 
         rule.check(CLASSES);
     }

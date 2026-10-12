@@ -3,6 +3,8 @@ package com.spendly.transactionservice.service;
 import com.spendly.common.web.ApiException;
 import com.spendly.transactionservice.domain.Category;
 import com.spendly.transactionservice.domain.CategoryKind;
+import com.spendly.transactionservice.domain.CategorySnapshot;
+import com.spendly.transactionservice.domain.CategoryView;
 import com.spendly.transactionservice.repository.CategoryRepository;
 import com.spendly.transactionservice.repository.TransactionRepository;
 import java.time.Clock;
@@ -10,11 +12,8 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,31 +36,39 @@ public class CategoryService {
     private final TransactionRepository transactions;
     private final CategorySeeds seeds;
     private final CategorySeeder seeder;
+    private final CategoryReads reads;
     private final Clock clock;
+    private final LedgerEvents events;
 
     public CategoryService(
             CategoryRepository categories,
             TransactionRepository transactions,
             CategorySeeds seeds,
             CategorySeeder seeder,
-            Clock clock) {
+            CategoryReads reads,
+            Clock clock,
+            LedgerEvents events) {
         this.categories = categories;
         this.transactions = transactions;
         this.seeds = seeds;
         this.seeder = seeder;
+        this.reads = reads;
         this.clock = clock;
+        this.events = events;
     }
 
     @Transactional
-    public List<Category> tree(UUID ownerId, Locale locale, boolean includeArchived) {
+    public List<CategoryView> tree(UUID ownerId, Locale locale, boolean includeArchived) {
         if (categories.countSeeded(ownerId) == 0) {
             try {
                 seeder.seed(ownerId, seeds.languageFor(locale));
             } catch (DataIntegrityViolationException ex) {
                 log.debug("Concurrent seeding for owner {}, keeping the existing set", ownerId);
             }
+            reads.evict(ownerId);
         }
-        return categories.findTree(ownerId, includeArchived);
+        CategorySnapshot snapshot = reads.all(ownerId);
+        return includeArchived ? snapshot.categories() : snapshot.live();
     }
 
     public Category get(UUID ownerId, UUID categoryId) {
@@ -81,7 +88,10 @@ public class CategoryService {
         Category category = Category.create(
                 ownerId, command.name().strip(), command.kind(), blankToNull(command.icon()), command.parentId(), 0,
                 null);
-        return saveUnique(category);
+        Category saved = saveUnique(category);
+        events.categoryChanged(saved);
+        reads.evict(ownerId);
+        return saved;
     }
 
     @Transactional
@@ -105,6 +115,8 @@ public class CategoryService {
             reparent(ownerId, category, command.parentId());
         }
         categories.flush();
+        events.categoryChanged(category);
+        reads.evict(ownerId);
         return category;
     }
 
@@ -112,9 +124,12 @@ public class CategoryService {
     public Category archive(UUID ownerId, UUID categoryId) {
         Category category = owned(ownerId, categoryId);
         category.archive(clock.instant());
+        events.categoryChanged(category);
         for (Category child : categories.findChildren(ownerId, categoryId)) {
             child.archive(clock.instant());
+            events.categoryChanged(child);
         }
+        reads.evict(ownerId);
         return category;
     }
 
@@ -140,30 +155,11 @@ public class CategoryService {
         int splitsMoved = transactions.recategoriseSplits(ownerId, sourceId, targetId);
         int childrenMoved = categories.reparentChildren(ownerId, sourceId, targetId);
         source.mergeInto(target, clock.instant());
+        events.categoryChanged(source);
+        reads.evict(ownerId);
+        events.merged(ownerId, sourceId, targetId);
         log.info("Merged category {} into {} for owner {}", sourceId, targetId, ownerId);
         return new CategoryMerge(sourceId, targetId, transactionsMoved, splitsMoved, childrenMoved);
-    }
-
-    public Map<UUID, Category> requireOwnedLive(UUID ownerId, Set<UUID> ids, CategoryKind kind) {
-        if (ids.isEmpty()) {
-            return Map.of();
-        }
-        Map<UUID, Category> found = categories.findAllOwned(ownerId, ids).stream()
-                .collect(Collectors.toMap(Category::getId, Function.identity()));
-        for (UUID id : ids) {
-            Category category = found.get(id);
-            if (category == null) {
-                throw new ApiException.NotFound("Category", id);
-            }
-            if (category.isArchived()) {
-                throw new ApiException.Unprocessable("Category " + id + " is archived");
-            }
-            if (category.getKind() != kind) {
-                throw new ApiException.Unprocessable("Category " + id + " is an " + category.getKind()
-                        + " category and cannot label a " + kind + " transaction");
-            }
-        }
-        return found;
     }
 
     private Category saveUnique(Category category) {

@@ -43,6 +43,9 @@ public class Account extends BaseEntityAudit {
     @Column(name = "archived_at")
     private @Nullable Instant archivedAt;
 
+    @Column(name = "household_id")
+    private @Nullable UUID householdId;
+
     public static Account open(UUID ownerId, String name, AccountType type, Currency currency) {
         Account account = new Account();
         account.ownerId = ownerId;
@@ -58,6 +61,18 @@ public class Account extends BaseEntityAudit {
 
     public boolean isArchived() {
         return archivedAt != null;
+    }
+
+    public boolean isOwnedBy(UUID userId) {
+        return ownerId.equals(userId);
+    }
+
+    public void shareWith(UUID householdId) {
+        this.householdId = householdId;
+    }
+
+    public void unshare() {
+        this.householdId = null;
     }
 
     public void archive(Instant at) {

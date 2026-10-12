@@ -1,6 +1,9 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { LoginResponse, OidcSecurityService } from 'angular-auth-oidc-client';
-import { Observable, tap } from 'rxjs';
+import { Router } from '@angular/router';
+import { firstValueFrom } from 'rxjs';
+import { environment } from '../../../environments/environment';
+import { AccessTokenResponse, AuthenticationApi } from '../api/auth';
+import { rememberReturnUrl } from './return-url';
 
 export interface AuthenticatedUser {
   readonly subject: string;
@@ -9,82 +12,181 @@ export interface AuthenticatedUser {
   readonly roles: readonly string[];
 }
 
-interface KeycloakClaims {
+export type SignInResult =
+  | { readonly status: 'signed-in' }
+  | { readonly status: 'two-factor'; readonly challengeToken: string };
+
+export interface StepUpRequest {
+  readonly resolve: (confirmed: boolean) => void;
+}
+
+interface TokenClaims {
   sub?: string;
   email?: string;
-  name?: string;
   preferred_username?: string;
   realm_access?: { roles?: string[] };
+  exp?: number;
 }
 
+const RENEW_BEFORE_EXPIRY_SECONDS = 30;
+
+/**
+ * The browser's session: a short-lived access token held in memory and a long-lived cookie
+ * that only auth-service can read. A reload loses the token and gets it back from the cookie.
+ */
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-  private readonly oidc = inject(OidcSecurityService);
+  private readonly api = inject(AuthenticationApi);
+  private readonly router = inject(Router);
 
-  private readonly authenticated = signal(false);
-  private readonly user = signal<AuthenticatedUser | null>(null);
+  private readonly accessToken = signal<string | null>(null);
   private readonly ready = signal(false);
+  private readonly pendingStepUp = signal<StepUpRequest | null>(null);
 
-  readonly isAuthenticated = this.authenticated.asReadonly();
-  readonly currentUser = this.user.asReadonly();
+  private renewTimer: ReturnType<typeof setTimeout> | null = null;
+  private refreshing: Promise<boolean> | null = null;
+  private stepUpPromise: Promise<boolean> | null = null;
+
   readonly isReady = this.ready.asReadonly();
-  readonly isAdmin = computed(() => this.user()?.roles.includes('ADMIN') ?? false);
+  readonly isAuthenticated = computed(() => this.accessToken() !== null);
+  readonly currentUser = computed(() => userFrom(this.accessToken()));
+  readonly isAdmin = computed(() => this.currentUser()?.roles.includes('ADMIN') ?? false);
+  readonly stepUpRequest = this.pendingStepUp.asReadonly();
 
-  /**
-   * `checkAuth()` is cold and, on the callback route, consumes the single-use authorization
-   * code. Subscribing here as well as returning it would run the exchange twice and the
-   * second attempt would fail, so the app initializer provides the only subscription.
-   */
-  initialize(): Observable<LoginResponse> {
-    return this.oidc.checkAuth().pipe(
-      tap(({ isAuthenticated, userData, accessToken }) => {
-        this.authenticated.set(isAuthenticated);
-        this.user.set(isAuthenticated ? toUser(userData, accessToken) : null);
-        this.ready.set(true);
-      }),
-    );
+  async initialize(): Promise<void> {
+    await this.refresh();
+    this.ready.set(true);
   }
 
-  login(): void {
-    this.oidc.authorize();
+  token(): string | null {
+    return this.accessToken();
   }
 
-  /** `kc_idp_hint` is a Keycloak extension that skips the provider chooser. */
-  loginWithGoogle(): void {
-    this.oidc.authorize(undefined, { customParams: { kc_idp_hint: 'google' } });
+  async signIn(email: string, password: string): Promise<SignInResult> {
+    const response = await firstValueFrom(this.api.login({ email, password }));
+    if (response.status === 'TWO_FACTOR_REQUIRED' && response.challengeToken) {
+      return { status: 'two-factor', challengeToken: response.challengeToken };
+    }
+    this.apply({
+      accessToken: response.accessToken ?? '',
+      tokenType: 'Bearer',
+      expiresIn: response.expiresIn ?? 0,
+    });
+    return { status: 'signed-in' };
   }
 
-  /**
-   * Same Authorization Code + PKCE flow, but `prompt=create` (OIDC "Initiating User
-   * Registration") opens Keycloak's sign-up form instead of the login form. The realm keeps
-   * that form to email + password; the account comes back signed in like any other login.
-   */
-  register(): void {
-    this.oidc.authorize(undefined, { customParams: { prompt: 'create' } });
+  async completeTwoFactor(challengeToken: string, code: string): Promise<void> {
+    this.apply(await firstValueFrom(this.api.loginWithTwoFactor({ challengeToken, code })));
   }
 
-  logout(): void {
-    this.oidc.logoff().subscribe();
+  async register(email: string, password: string): Promise<void> {
+    this.apply(await firstValueFrom(this.api.register({ email, password })));
+  }
+
+  signInWithGoogle(): void {
+    window.location.assign(`${environment.api.auth}/api/v1/auth/google/start`);
+  }
+
+  async reauthenticate(password: string, code?: string): Promise<void> {
+    this.apply(await firstValueFrom(this.api.reauthenticate({ password, code })));
+  }
+
+  refresh(): Promise<boolean> {
+    this.refreshing ??= this.renew().finally(() => {
+      this.refreshing = null;
+    });
+    return this.refreshing;
+  }
+
+  requestStepUp(): Promise<boolean> {
+    this.stepUpPromise ??= new Promise<boolean>((resolve) => {
+      this.pendingStepUp.set({
+        resolve: (confirmed) => {
+          this.pendingStepUp.set(null);
+          this.stepUpPromise = null;
+          resolve(confirmed);
+        },
+      });
+    });
+    return this.stepUpPromise;
+  }
+
+  async logout(): Promise<void> {
+    try {
+      await firstValueFrom(this.api.logout());
+    } catch {
+      // The cookie expires on its own; the person is signed out here either way.
+    }
+    this.clear();
+    await this.router.navigateByUrl('/login');
+  }
+
+  sessionExpired(): void {
+    if (!this.isAuthenticated()) {
+      return;
+    }
+    rememberReturnUrl(this.router.url);
+    this.clear();
+    void this.router.navigateByUrl('/login');
+  }
+
+  secondsLeft(): number | null {
+    const exp = claimsOf(this.accessToken())?.exp;
+    return exp === undefined ? null : exp - Date.now() / 1000;
+  }
+
+  private async renew(): Promise<boolean> {
+    try {
+      this.apply(await firstValueFrom(this.api.refresh()));
+      return true;
+    } catch {
+      this.clear();
+      return false;
+    }
+  }
+
+  private apply(response: AccessTokenResponse): void {
+    this.accessToken.set(response.accessToken);
+    this.cancelRenewal();
+    const lifetime = Math.max(response.expiresIn - RENEW_BEFORE_EXPIRY_SECONDS, 1);
+    this.renewTimer = setTimeout(() => void this.refresh(), lifetime * 1000);
+  }
+
+  private clear(): void {
+    this.cancelRenewal();
+    this.accessToken.set(null);
+  }
+
+  private cancelRenewal(): void {
+    if (this.renewTimer !== null) {
+      clearTimeout(this.renewTimer);
+      this.renewTimer = null;
+    }
   }
 }
 
-function toUser(userData: unknown, accessToken: string): AuthenticatedUser {
-  const profile = (userData ?? {}) as KeycloakClaims;
-  const claims = decodeJwtPayload(accessToken);
-
+function userFrom(token: string | null): AuthenticatedUser | null {
+  const claims = claimsOf(token);
+  if (claims === null) {
+    return null;
+  }
   return {
-    subject: profile.sub ?? claims?.sub ?? '',
-    email: profile.email ?? claims?.email ?? null,
-    name: profile.name ?? profile.preferred_username ?? claims?.preferred_username ?? null,
-    roles: claims?.realm_access?.roles ?? [],
+    subject: claims.sub ?? '',
+    email: claims.email ?? null,
+    name: claims.preferred_username ?? null,
+    roles: claims.realm_access?.roles ?? [],
   };
+}
+
+function claimsOf(token: string | null): TokenClaims | null {
+  return token === null ? null : decodeJwtPayload(token);
 }
 
 /**
  * Display purposes only. The signature is never checked here - the backend does that, and a
  * token this client trusted on its own word would prove nothing.
  */
-function decodeJwtPayload(token: string): KeycloakClaims | null {
+export function decodeJwtPayload(token: string): TokenClaims | null {
   const payload = token?.split('.')[1];
   if (!payload) {
     return null;
@@ -92,7 +194,7 @@ function decodeJwtPayload(token: string): KeycloakClaims | null {
   try {
     const normalised = payload.replace(/-/g, '+').replace(/_/g, '/');
     const padded = normalised.padEnd(normalised.length + ((4 - (normalised.length % 4)) % 4), '=');
-    return JSON.parse(atob(padded)) as KeycloakClaims;
+    return JSON.parse(atob(padded)) as TokenClaims;
   } catch {
     return null;
   }

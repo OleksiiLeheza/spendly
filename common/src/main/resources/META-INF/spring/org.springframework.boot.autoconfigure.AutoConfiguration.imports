@@ -1,1 +1,4 @@
 com.spendly.common.autoconfigure.CommonWebAutoConfiguration
+com.spendly.common.autoconfigure.CommonMessagingAutoConfiguration
+com.spendly.common.autoconfigure.CommonDeadLetterAutoConfiguration
+com.spendly.common.autoconfigure.CommonDemoAutoConfiguration

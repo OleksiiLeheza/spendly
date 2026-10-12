@@ -1,6 +1,7 @@
 package com.spendly.common.security;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -23,6 +24,8 @@ public class CurrentUserArgumentResolver implements HandlerMethodArgumentResolve
 
     private static final String REALM_ACCESS = "realm_access";
     private static final String ROLES = "roles";
+    private static final String HOUSEHOLDS = "households";
+    private static final String AUTH_TIME = "auth_time";
 
     @Override
     public boolean supportsParameter(MethodParameter parameter) {
@@ -63,7 +66,28 @@ public class CurrentUserArgumentResolver implements HandlerMethodArgumentResolve
                 subject,
                 jwt.getClaimAsString("email"),
                 jwt.getClaimAsString("preferred_username"),
-                realmRoles(jwt));
+                realmRoles(jwt),
+                households(jwt),
+                jwt.getClaimAsInstant(AUTH_TIME));
+    }
+
+    static Set<UUID> households(Jwt jwt) {
+        List<String> claim = jwt.getClaimAsStringList(HOUSEHOLDS);
+        if (claim == null) {
+            return Set.of();
+        }
+        return claim.stream()
+                .map(CurrentUserArgumentResolver::uuidOrNull)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
+    private static @Nullable UUID uuidOrNull(String value) {
+        try {
+            return UUID.fromString(value.startsWith("/") ? value.substring(1) : value);
+        } catch (IllegalArgumentException notAHouseholdId) {
+            return null;
+        }
     }
 
     private static UUID toUuid(String subject) {

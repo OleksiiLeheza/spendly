@@ -8,8 +8,8 @@ html {
   @include mat.theme(
     (
       color: (
-        primary: mat.$azure-palette,
-        tertiary: mat.$blue-palette,
+        primary: mat.$cyan-palette,
+        tertiary: mat.$spring-green-palette,
       ),
       typography: Roboto,
       density: 0,
@@ -34,4 +34,10 @@ body {
 *::before,
 *::after {
   box-sizing: border-box;
+}
+
+// Material Symbols is the icon font the index.html loads; mat-icon defaults to the older
+// Material Icons ligature set, so the family is pointed at it once, here, for every icon.
+mat-icon {
+  font-family: 'Material Symbols Outlined';
 }
