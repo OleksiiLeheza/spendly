@@ -1,18 +1,188 @@
 // The Material 3 theme is the single source of colour, typography, shape and elevation
-// (CLAUDE.md 9.4). Components consume it through --mat-sys-* system variables and never
-// declare a palette of their own.
+// (CLAUDE.md 9.4). Components consume it through --mat-sys-* system variables and the --app-*
+// roles below, and never declare a palette of their own.
+//
+// The palettes are generated (`ng generate @angular/material:theme-color`) from a blue primary
+// #2563EB, a slate secondary #64748B, a coral tertiary #F08A85 and a cool grey neutral #707478.
+// The grey neutral is deliberate: a neutral derived from the blue itself tints every surface
+// lavender.
+@use 'sass:map';
 @use '@angular/material' as mat;
+@use 'theme/theme-colors' as spendly;
+
+$_primary: spendly.$primary-palette;
+$_tertiary: spendly.$tertiary-palette;
+$_teal: mat.$cyan-palette;
+
+$_font: Inter;
+$_card-shape: 0.75rem;
+$_control-shape: 0.5rem;
 
 html {
   height: 100%;
   @include mat.theme(
     (
       color: (
-        primary: mat.$cyan-palette,
-        tertiary: mat.$spring-green-palette,
+        primary: $_primary,
+        tertiary: $_tertiary,
       ),
-      typography: Roboto,
+      typography: (
+        plain-family: $_font,
+        brand-family: $_font,
+        bold-weight: 600,
+        medium-weight: 500,
+        regular-weight: 400,
+      ),
       density: 0,
+    )
+  );
+
+  // A calmer type scale than Material's default: semibold headings a step smaller, with the
+  // slight negative tracking Inter is drawn for at display sizes.
+  @include mat.theme-overrides(
+    (
+      display-small: 600 2.25rem / 2.75rem $_font,
+      display-small-weight: 600,
+      display-small-tracking: -0.025em,
+      headline-large: 600 1.875rem / 2.375rem $_font,
+      headline-large-weight: 600,
+      headline-large-tracking: -0.02em,
+      headline-medium: 600 1.5rem / 2rem $_font,
+      headline-medium-weight: 600,
+      headline-medium-tracking: -0.015em,
+      headline-small: 600 1.25rem / 1.75rem $_font,
+      headline-small-weight: 600,
+      headline-small-tracking: -0.01em,
+      title-large: 600 1.125rem / 1.625rem $_font,
+      title-large-weight: 600,
+      title-medium: 600 1rem / 1.5rem $_font,
+      title-medium-weight: 600,
+      title-medium-tracking: 0,
+      title-small: 600 0.875rem / 1.25rem $_font,
+      title-small-weight: 600,
+      title-small-tracking: 0,
+      label-large-tracking: 0,
+      body-large-tracking: 0,
+      body-medium-tracking: 0,
+    )
+  );
+
+  // Roles Material has no slot for. Each one names a job and resolves to the palettes above,
+  // separately for light and dark.
+  --app-canvas: light-dark(var(--mat-sys-surface-container-low), var(--mat-sys-surface));
+  --app-card: light-dark(var(--mat-sys-surface-container-lowest), var(--mat-sys-surface-container));
+  --app-card-shape: #{$_card-shape};
+  --app-control-shape: #{$_control-shape};
+
+  // The hero card: the one solid block of brand colour on a screen.
+  --app-rail: light-dark(#{map.get($_primary, 35)}, #{map.get($_primary, 30)});
+  --app-on-rail: #{map.get($_primary, 100)};
+  --app-on-rail-variant: #{map.get($_primary, 90)};
+
+  --app-nav: light-dark(
+    var(--mat-sys-surface-container-lowest),
+    var(--mat-sys-surface-container-low)
+  );
+  --app-on-nav: var(--mat-sys-on-surface);
+  --app-on-nav-variant: var(--mat-sys-on-surface-variant);
+  --app-nav-tile: color-mix(in srgb, var(--mat-sys-primary) 10%, transparent);
+  --app-on-nav-tile: var(--mat-sys-primary);
+
+  --app-aside: var(--app-canvas);
+
+  // Chart colours, one per entity, so income is blue, spending coral and saving teal on every
+  // chart. The set passes the colour-vision and contrast checks of the dataviz validator against
+  // the card it is drawn on: tones 40 / 60 / 60 on white, 60 / 60 / 60 on the dark card.
+  --app-chart-income: light-dark(#{map.get($_primary, 40)}, #{map.get($_primary, 60)});
+  --app-chart-spending: #{map.get($_tertiary, 60)};
+  --app-chart-net: #{map.get($_teal, 60)};
+  @each $entity in (income, spending, net) {
+    --app-chart-#{$entity}-soft: color-mix(in srgb, var(--app-chart-#{$entity}) 45%, transparent);
+    --app-chart-#{$entity}-wash: color-mix(in srgb, var(--app-chart-#{$entity}) 14%, transparent);
+  }
+  --app-on-chart: #{map.get($_primary, 100)};
+  --app-chart-grid: var(--mat-sys-outline-variant);
+  --app-chart-axis: var(--mat-sys-on-surface-variant);
+
+  @include mat.card-overrides(
+    (
+      outlined-container-color: var(--app-card),
+      outlined-container-elevation: none,
+      outlined-container-shape: $_card-shape,
+      outlined-outline-color: var(--mat-sys-outline-variant),
+      outlined-outline-width: 1px,
+      elevated-container-color: var(--app-card),
+      elevated-container-elevation: none,
+      elevated-container-shape: $_card-shape,
+      filled-container-color: var(--mat-sys-surface-container),
+      filled-container-shape: $_card-shape,
+      title-text-size: 1rem,
+      title-text-line-height: 1.5rem,
+      title-text-weight: 600,
+      title-text-tracking: 0,
+      subtitle-text-size: 0.8125rem,
+      subtitle-text-line-height: 1.25rem,
+      subtitle-text-weight: 400,
+      subtitle-text-tracking: 0,
+      subtitle-text-color: var(--mat-sys-on-surface-variant),
+    )
+  );
+
+  // Controls get a small radius instead of Material's pill, which reads as a toy in a dense,
+  // number-heavy screen.
+  @include mat.button-overrides(
+    (
+      filled-container-shape: $_control-shape,
+      outlined-container-shape: $_control-shape,
+      protected-container-shape: $_control-shape,
+      tonal-container-shape: $_control-shape,
+      text-container-shape: $_control-shape,
+    )
+  );
+
+  @include mat.button-toggle-overrides(
+    (
+      shape: $_control-shape,
+      selected-state-background-color: var(--mat-sys-secondary-container),
+      selected-state-text-color: var(--mat-sys-on-secondary-container),
+      label-text-weight: 500,
+    )
+  );
+
+  @include mat.chips-overrides(
+    (
+      container-shape-radius: $_control-shape,
+    )
+  );
+
+  @include mat.form-field-overrides(
+    (
+      outlined-container-shape: $_control-shape,
+      filled-container-shape: $_control-shape,
+      outlined-outline-color: var(--mat-sys-outline-variant),
+    )
+  );
+
+  // A list's trailing text is where amounts sit; Material sets it in the tiny label size.
+  @include mat.list-overrides(
+    (
+      list-item-trailing-supporting-text-size: 0.875rem,
+      list-item-trailing-supporting-text-line-height: 1.25rem,
+      list-item-trailing-supporting-text-weight: 500,
+      list-item-trailing-supporting-text-tracking: 0,
+      list-item-trailing-supporting-text-color: var(--mat-sys-on-surface),
+    )
+  );
+
+  @include mat.dialog-overrides(
+    (
+      container-shape: $_card-shape,
+    )
+  );
+
+  @include mat.toolbar-overrides(
+    (
+      container-background-color: var(--app-nav),
     )
   );
 }
@@ -22,9 +192,12 @@ body {
   // day one rather than being retrofitted.
   color-scheme: light dark;
 
-  background-color: var(--mat-sys-surface);
+  background-color: var(--app-canvas);
   color: var(--mat-sys-on-surface);
   font: var(--mat-sys-body-medium);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 
   margin: 0;
   min-height: 100%;
@@ -37,7 +210,94 @@ body {
 }
 
 // Material Symbols is the icon font the index.html loads; mat-icon defaults to the older
-// Material Icons ligature set, so the family is pointed at it once, here, for every icon.
+// Material Icons ligature set, so the family is pointed at it once, here, for every icon. The
+// size is Material's 24px; without it an icon takes the size of the text around it. Components
+// that size an icon themselves (buttons, lists, chips) still win.
 mat-icon {
   font-family: 'Material Symbols Outlined';
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+// The navigation rail is a plain surface with a hairline divider; the content sits flush beside it.
+.app-shell {
+  @include mat.sidenav-overrides(
+    (
+      container-background-color: var(--app-nav),
+      container-text-color: var(--app-on-nav),
+      container-divider-color: var(--mat-sys-outline-variant),
+      container-shape: 0,
+      content-background-color: var(--app-canvas),
+    )
+  );
+}
+
+// The rail's links are compact and quiet; the current page is the only one in the accent.
+.app-rail {
+  @include mat.list-overrides(
+    (
+      list-item-one-line-container-height: 2.5rem,
+      list-item-label-text-color: var(--app-on-nav-variant),
+      list-item-label-text-weight: 500,
+      list-item-label-text-size: 0.875rem,
+      list-item-hover-label-text-color: var(--app-on-nav),
+      list-item-focus-label-text-color: var(--app-on-nav),
+      list-item-leading-icon-color: var(--app-on-nav-variant),
+      list-item-leading-icon-size: 1.25rem,
+      list-item-hover-leading-icon-color: var(--app-on-nav),
+      list-item-trailing-supporting-text-color: var(--app-on-nav-variant),
+      list-item-hover-state-layer-color: var(--app-on-nav),
+      list-item-hover-state-layer-opacity: 0.04,
+      list-item-focus-state-layer-color: var(--app-on-nav),
+      list-item-container-shape: $_control-shape,
+      active-indicator-color: var(--app-nav-tile),
+      active-indicator-shape: $_control-shape,
+    )
+  );
+  @include mat.icon-button-overrides(
+    (
+      icon-color: var(--app-on-nav-variant),
+      state-layer-color: var(--app-on-nav),
+    )
+  );
+}
+
+.app-rail-link--active {
+  @include mat.list-overrides(
+    (
+      list-item-label-text-color: var(--app-on-nav-tile),
+      list-item-hover-label-text-color: var(--app-on-nav-tile),
+      list-item-focus-label-text-color: var(--app-on-nav-tile),
+      list-item-leading-icon-color: var(--app-on-nav-tile),
+      list-item-hover-leading-icon-color: var(--app-on-nav-tile),
+      list-item-label-text-weight: 600,
+    )
+  );
+}
+
+// A meter takes the colour of the entity it measures; its track is a lighter step of the same
+// hue, so the state reads across the whole bar.
+@each $entity in (income, spending, net) {
+  .app-meter--#{$entity} {
+    @include mat.progress-bar-overrides(
+      (
+        active-indicator-color: var(--app-chart-#{$entity}),
+        track-color: var(--app-chart-#{$entity}-wash),
+        active-indicator-height: 0.5rem,
+        track-height: 0.5rem,
+        track-shape: var(--mat-sys-corner-full),
+      )
+    );
+  }
+}
+
+// A meter past its limit turns to the error colour. Material 3 ignores a progress bar's `color`
+// input, so the state is a class rather than `color="warn"`.
+.app-meter--over {
+  @include mat.progress-bar-overrides(
+    (
+      active-indicator-color: var(--mat-sys-error),
+      track-color: var(--mat-sys-error-container),
+    )
+  );
 }

@@ -38,6 +38,7 @@ import { provideApi as provideGoalApi } from './core/api/goal';
 import { provideApi as provideNotificationApi } from './core/api/notification';
 import { provideApi as provideAnalyticsApi } from './core/api/analytics';
 import { provideApi as provideSharingApi } from './core/api/sharing';
+import { MAT_FORM_FIELD_DEFAULT_OPTIONS } from '@angular/material/form-field';
 import { environment } from '../environments/environment';
 
 registerLocaleData(localeUk);
@@ -94,5 +95,6 @@ export const appConfig: ApplicationConfig = {
     provideAppInitializer(() => inject(LanguageService).initialize()),
     provideAppInitializer(() => inject(ThemeService).initialize()),
     { provide: TitleStrategy, useExisting: TranslatedTitleStrategy },
+    { provide: MAT_FORM_FIELD_DEFAULT_OPTIONS, useValue: { appearance: 'outline' } },
   ],
 };

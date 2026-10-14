@@ -26,12 +26,15 @@ test.describe('signing in with email and password', () => {
     await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
 
-    // The overview only renders once its authenticated calls to account-, budget-,
-    // recurring- and transaction-service have resolved, so these four cards prove the
-    // bearer token was accepted across the whole back end, not merely that the form posted.
-    for (const card of ['Balances', 'Spent this month', 'Due in 30 days', 'Needs attention']) {
+    for (const card of ['Total balance', 'Cash flow', 'Budgets this month', 'Upcoming payments']) {
       await expect(page.getByText(card, { exact: true })).toBeVisible();
     }
+
+    // The recent-activity list is filled from transaction-service with the bearer token, so a
+    // link to a seeded entry proves the token was accepted, not merely that the form posted.
+    await expect(
+      page.getByRole('complementary').locator('a[href^="/transactions/"]').first(),
+    ).toBeVisible({ timeout: 20_000 });
   });
 
   test('the seeded administrator signs in with the ADMIN role', async ({ page }) => {

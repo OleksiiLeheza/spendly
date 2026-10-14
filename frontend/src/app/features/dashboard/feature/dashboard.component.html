@@ -1,168 +1,283 @@
-<div class="page">
-  <header class="page__header">
-    <div>
-      <h1 class="page__title">{{ 'dashboard.title' | transloco }}</h1>
-      <p class="page__subtitle">{{ monthTitle() }}</p>
-    </div>
-    <div class="page__actions">
-      <a matButton="filled" routerLink="/transactions">
-        <mat-icon fontIcon="add" />
-        {{ 'dashboard.add' | transloco }}
-      </a>
-    </div>
-  </header>
-
-  <div class="kpis">
-    <mat-card appearance="outlined">
-      <mat-card-content class="kpi">
-        <span class="kpi__label">
-          <mat-icon fontIcon="account_balance_wallet" aria-hidden="true" />
-          {{ 'dashboard.kpis.balances' | transloco }}
-        </span>
-        @if (overview.loading() && !balances().length) {
-          <span class="kpi__value">—</span>
-        } @else if (!balances().length) {
-          <span class="kpi__value">—</span>
-          <span class="kpi__hint">{{ 'dashboard.kpis.noAccounts' | transloco }}</span>
-        } @else {
-          @for (balance of balances(); track balance) {
-            <span class="kpi__value">{{ balance }}</span>
-          }
-          <span class="kpi__hint">{{ 'dashboard.kpis.balancesHint' | transloco }}</span>
-        }
-      </mat-card-content>
-    </mat-card>
-
-    <mat-card appearance="outlined">
-      <mat-card-content class="kpi">
-        <span class="kpi__label">
-          <mat-icon fontIcon="shopping_bag" aria-hidden="true" />
-          {{ 'dashboard.kpis.spent' | transloco }}
-        </span>
-        @if (budgetTotal(); as total) {
-          <span class="kpi__value">{{ moneyLabel(total.spent) }}</span>
-          <mat-progress-bar
-            mode="determinate"
-            [value]="total.percent > 100 ? 100 : total.percent"
-            [color]="total.percent > 100 ? 'warn' : 'primary'"
-            [attr.aria-label]="'budgets.usedAria' | transloco: { currency: total.currency }"
-          />
-          <span class="kpi__hint">
-            {{
-              'dashboard.kpis.budgetedOf'
-                | transloco: { percent: total.percent, limit: moneyLabel(total.limit) }
-            }}
-            · {{ 'common.daysLeft' | transloco: { count: daysLeft() } }}
-          </span>
-        } @else {
-          <span class="kpi__value">—</span>
-          <span class="kpi__hint">{{ 'dashboard.kpis.noBudgets' | transloco }}</span>
-        }
-      </mat-card-content>
-    </mat-card>
-
-    <mat-card appearance="outlined">
-      <mat-card-content class="kpi">
-        <span class="kpi__label">
-          <mat-icon fontIcon="event_repeat" aria-hidden="true" />
-          {{ 'dashboard.kpis.due' | transloco }}
-        </span>
-        @if (overview.upcomingTotals()[0]; as total) {
-          <span class="kpi__value">{{ moneyLabel(total.outgoing) }}</span>
-          <span class="kpi__hint">
-            {{ 'dashboard.kpis.comingIn' | transloco: { amount: moneyLabel(total.incoming) } }}
-          </span>
-        } @else {
-          <span class="kpi__value">—</span>
-          <span class="kpi__hint">{{ 'dashboard.kpis.nothingScheduled' | transloco }}</span>
-        }
-      </mat-card-content>
-    </mat-card>
-
-    <mat-card appearance="outlined">
-      <mat-card-content class="kpi">
-        <span class="kpi__label">
-          <mat-icon fontIcon="notifications" aria-hidden="true" />
-          {{ 'dashboard.kpis.attention' | transloco }}
-        </span>
-        <span class="kpi__value">{{ attention().length }}</span>
-        <span class="kpi__hint">
-          @if (attention().length) {
-            {{ attention()[0].title }}
-          } @else {
-            {{ 'dashboard.kpis.allOnTrack' | transloco }}
-          }
-        </span>
-      </mat-card-content>
-    </mat-card>
-  </div>
-
-  <div class="columns">
-    <mat-card appearance="outlined">
-      <mat-card-header>
-        <mat-card-title class="card-link">
-          {{ 'dashboard.budgetsTitle' | transloco }}
-          <a matButton routerLink="/budgets">{{ 'dashboard.seeAll' | transloco }}</a>
-        </mat-card-title>
-      </mat-card-header>
-      <mat-card-content>
-        @if (overview.loading() && !topBudgets().length) {
-          <app-skeleton-rows [count]="3" [label]="'dashboard.loadingBudgets' | transloco" />
-        } @else if (!topBudgets().length) {
-          <app-page-state
-            icon="data_usage"
-            [title]="'dashboard.noBudgetsTitle' | transloco"
-            [message]="'dashboard.noBudgetsMessage' | transloco"
-            [actionLabel]="'dashboard.setBudget' | transloco"
-            actionIcon="add"
-            (action)="(null)"
-          />
-        } @else {
-          @for (budget of topBudgets(); track budget.id; let last = $last) {
-            <app-budget-row [budget]="budget" [showActions]="false" />
-            @if (!last) {
-              <mat-divider />
+<div class="dashboard">
+  <div class="dashboard__main">
+    <header class="page__header">
+      <div>
+        <h1 class="page__title">{{ 'dashboard.title' | transloco }}</h1>
+        <p class="page__subtitle">{{ monthTitle() }}</p>
+      </div>
+      <div class="page__actions">
+        @if (currencies().length > 1) {
+          <mat-button-toggle-group
+            hideSingleSelectionIndicator
+            [value]="currency()"
+            [aria-label]="'dashboard.currency' | transloco"
+            (change)="selectCurrency($event.value)"
+          >
+            @for (code of currencies(); track code) {
+              <mat-button-toggle [value]="code">{{ code }}</mat-button-toggle>
             }
-          }
+          </mat-button-toggle-group>
         }
-      </mat-card-content>
-    </mat-card>
+        <a matButton="filled" routerLink="/transactions">
+          <mat-icon fontIcon="add" />
+          {{ 'dashboard.add' | transloco }}
+        </a>
+      </div>
+    </header>
 
-    <mat-card appearance="outlined">
-      <mat-card-header>
-        <mat-card-title class="card-link">
-          {{ 'dashboard.upcomingTitle' | transloco }}
-          <a matButton routerLink="/recurring">{{ 'dashboard.seeAll' | transloco }}</a>
-        </mat-card-title>
-      </mat-card-header>
-      <mat-card-content>
-        @if (!upcoming().length) {
-          <p>{{ 'dashboard.nothingDue' | transloco }}</p>
-        } @else {
-          <mat-list>
-            @for (item of upcoming(); track item.key) {
-              <mat-list-item>
-                <span matListItemTitle>{{ item.name }}</span>
-                <span matListItemLine>{{ item.dueOn | date: 'EEE d MMM' }}</span>
-                <span matListItemMeta>
-                  <app-money-amount [money]="item.amount" [direction]="item.direction" />
+    @if (overview.error(); as error) {
+      <app-page-state
+        kind="error"
+        icon="cloud_off"
+        [title]="error | transloco"
+        [actionLabel]="'common.retry' | transloco"
+        (action)="reload()"
+      />
+    }
+
+    @if (analytics.refreshing()) {
+      <mat-card appearance="filled" role="status">
+        <mat-card-content class="banner">
+          <mat-icon fontIcon="sync" aria-hidden="true" />
+          <span class="banner__text">
+            <strong>{{ 'insights.refreshing.title' | transloco }}</strong>
+            <span>{{ 'insights.refreshing.message' | transloco }}</span>
+          </span>
+        </mat-card-content>
+      </mat-card>
+    }
+
+    @if (attention().length) {
+      <mat-card appearance="outlined" role="status">
+        <mat-card-content class="attention">
+          <h2 class="attention__title">
+            <mat-icon fontIcon="notifications_active" aria-hidden="true" />
+            {{ 'dashboard.attention.title' | transloco }}
+          </h2>
+          <ul class="attention__list">
+            @for (item of attention(); track item.key) {
+              <li class="attention__item">
+                <mat-icon [fontIcon]="item.icon" aria-hidden="true" />
+                <span>
+                  <strong>{{ item.title }}</strong>
+                  <span class="attention__detail">{{ item.detail }}</span>
                 </span>
-              </mat-list-item>
+              </li>
             }
-          </mat-list>
+          </ul>
+        </mat-card-content>
+      </mat-card>
+    }
+
+    <section class="hero">
+      <app-balance-card [view]="balanceCard()" />
+
+      <mat-card appearance="outlined" class="fill">
+        <mat-card-header>
+          <mat-card-title>{{ 'dashboard.saved.title' | transloco }}</mat-card-title>
+          <mat-card-subtitle>{{ 'dashboard.saved.subtitle' | transloco }}</mat-card-subtitle>
+        </mat-card-header>
+        <mat-card-content>
+          @if (analytics.loading() && !analytics.insights()) {
+            <app-skeleton-rows [count]="3" [label]="'dashboard.loadingCharts' | transloco" />
+          } @else if (analytics.analyticsFailed()) {
+            <app-page-state
+              kind="error"
+              icon="cloud_off"
+              [title]="'dashboard.errors.analytics' | transloco"
+              [actionLabel]="'common.retry' | transloco"
+              (action)="analytics.load()"
+            />
+          } @else if (!hasActivity() || !currency()) {
+            <app-page-state
+              icon="show_chart"
+              [title]="'dashboard.noChartsTitle' | transloco"
+              [message]="'dashboard.noChartsMessage' | transloco"
+            />
+          } @else {
+            <app-trend-chart
+              [points]="savedTrend()"
+              [currency]="currency() ?? ''"
+              tone="net"
+              [label]="'dashboard.saved.title' | transloco"
+            />
+          }
+        </mat-card-content>
+      </mat-card>
+    </section>
+
+    <section class="tiles" [attr.aria-label]="'dashboard.tiles.label' | transloco">
+      <app-stat-tile
+        [label]="'dashboard.tiles.income' | transloco"
+        [value]="incomeTile().value"
+        [caption]="incomeTile().caption"
+        icon="payments"
+        tone="income"
+      />
+      <app-stat-tile
+        [label]="'dashboard.tiles.spending' | transloco"
+        [value]="spendingTile().value"
+        [caption]="spendingTile().caption"
+        [delta]="spendingTile().delta"
+        [deltaTone]="spendingTile().deltaTone"
+        [deltaUp]="spendingTile().deltaUp"
+        icon="shopping_bag"
+        tone="spending"
+      />
+      <app-stat-tile
+        [label]="'dashboard.tiles.savingsRate' | transloco"
+        [value]="savingsTile().value"
+        [caption]="savingsTile().caption"
+        icon="savings"
+        tone="net"
+      />
+    </section>
+
+    <mat-card appearance="outlined">
+      <mat-card-header>
+        <mat-card-title>{{ 'dashboard.cashFlow.title' | transloco }}</mat-card-title>
+        <mat-card-subtitle>{{ 'dashboard.cashFlow.subtitle' | transloco }}</mat-card-subtitle>
+      </mat-card-header>
+      <mat-card-content>
+        @if (analytics.loading() && !analytics.insights()) {
+          <app-skeleton-rows [count]="4" [label]="'dashboard.loadingCharts' | transloco" />
+        } @else if (analytics.analyticsFailed()) {
+          <app-page-state
+            kind="error"
+            icon="cloud_off"
+            [title]="'dashboard.errors.analytics' | transloco"
+            [actionLabel]="'common.retry' | transloco"
+            (action)="analytics.load()"
+          />
+        } @else if (!hasActivity() || !currency()) {
+          <app-page-state
+            icon="bar_chart"
+            [title]="'dashboard.noChartsTitle' | transloco"
+            [message]="'dashboard.noChartsMessage' | transloco"
+          />
+        } @else {
+          <app-cash-flow-chart
+            [months]="cashFlow()"
+            [currency]="currency() ?? ''"
+            [incomeLabel]="'insights.income' | transloco"
+            [expenseLabel]="'insights.spending' | transloco"
+            [label]="'dashboard.cashFlow.title' | transloco"
+          />
         }
       </mat-card-content>
     </mat-card>
+
+    <section class="pair">
+      <mat-card appearance="outlined">
+        <mat-card-header class="card-head">
+          <mat-card-title>{{ 'dashboard.categories.title' | transloco }}</mat-card-title>
+          <mat-card-subtitle>{{ 'dashboard.categories.subtitle' | transloco }}</mat-card-subtitle>
+          <a matButton routerLink="/insights">{{ 'dashboard.categories.more' | transloco }}</a>
+        </mat-card-header>
+        <mat-card-content>
+          @if (analytics.loading() && !analytics.report()) {
+            <app-skeleton-rows [count]="4" [label]="'dashboard.loadingCharts' | transloco" />
+          } @else if (!categories().length) {
+            <p class="muted">{{ 'dashboard.categories.empty' | transloco }}</p>
+          } @else {
+            <app-category-breakdown
+              [rows]="categories()"
+              [label]="'dashboard.categories.title' | transloco"
+            />
+          }
+        </mat-card-content>
+      </mat-card>
+
+      <mat-card appearance="outlined">
+        <mat-card-header>
+          <mat-card-title>{{ 'dashboard.pace.title' | transloco }}</mat-card-title>
+          <mat-card-subtitle>{{ 'dashboard.pace.subtitle' | transloco }}</mat-card-subtitle>
+        </mat-card-header>
+        <mat-card-content>
+          @if (analytics.loading() && !analytics.insights()) {
+            <app-skeleton-rows [count]="3" [label]="'dashboard.loadingCharts' | transloco" />
+          } @else if (pace(); as pace) {
+            <app-pace-meter [view]="pace" />
+          } @else {
+            <p class="muted">{{ 'dashboard.pace.empty' | transloco }}</p>
+          }
+        </mat-card-content>
+      </mat-card>
+    </section>
+
+    <section class="pair">
+      <mat-card appearance="outlined">
+        <mat-card-header class="card-head">
+          <mat-card-title>{{ 'dashboard.budgetsTitle' | transloco }}</mat-card-title>
+          <a matButton routerLink="/budgets">{{ 'dashboard.seeAll' | transloco }}</a>
+        </mat-card-header>
+        <mat-card-content>
+          @if (overview.loading() && !topBudgets().length) {
+            <app-skeleton-rows [count]="3" [label]="'dashboard.loadingBudgets' | transloco" />
+          } @else if (!topBudgets().length) {
+            <app-page-state
+              icon="data_usage"
+              [title]="'dashboard.noBudgetsTitle' | transloco"
+              [message]="'dashboard.noBudgetsMessage' | transloco"
+              [actionLabel]="'dashboard.setBudget' | transloco"
+              actionIcon="add"
+              (action)="open('/budgets')"
+            />
+          } @else {
+            @for (budget of topBudgets(); track budget.id; let last = $last) {
+              <app-budget-row [budget]="budget" [showActions]="false" />
+              @if (!last) {
+                <mat-divider />
+              }
+            }
+          }
+        </mat-card-content>
+      </mat-card>
+
+      <mat-card appearance="outlined">
+        <mat-card-header class="card-head">
+          <mat-card-title>{{ 'dashboard.goals.title' | transloco }}</mat-card-title>
+          <a matButton routerLink="/goals">{{ 'dashboard.seeAll' | transloco }}</a>
+        </mat-card-header>
+        <mat-card-content>
+          @if (analytics.loading() && !goals().length) {
+            <app-skeleton-rows [count]="3" [label]="'dashboard.loadingGoals' | transloco" />
+          } @else if (analytics.goalsFailed()) {
+            <app-page-state
+              kind="error"
+              icon="cloud_off"
+              [title]="'dashboard.errors.goals' | transloco"
+              [actionLabel]="'common.retry' | transloco"
+              (action)="analytics.load()"
+            />
+          } @else if (!goals().length) {
+            <app-page-state
+              icon="flag"
+              [title]="'dashboard.goals.emptyTitle' | transloco"
+              [message]="'dashboard.goals.emptyMessage' | transloco"
+              [actionLabel]="'dashboard.goals.create' | transloco"
+              actionIcon="add"
+              (action)="open('/goals')"
+            />
+          } @else {
+            <app-goal-progress [goals]="goals()" />
+          }
+        </mat-card-content>
+      </mat-card>
+    </section>
   </div>
 
-  <mat-card appearance="outlined">
-    <mat-card-header>
-      <mat-card-title class="card-link">
-        {{ 'dashboard.recentTitle' | transloco }}
-        <a matButton routerLink="/transactions">{{ 'dashboard.allTransactions' | transloco }}</a>
-      </mat-card-title>
-    </mat-card-header>
-    <mat-card-content>
+  <aside class="dashboard__aside" [attr.aria-label]="'dashboard.aside.label' | transloco">
+    <mat-card
+      appearance="outlined"
+      class="aside__section"
+      role="region"
+      aria-labelledby="recent-title"
+    >
+      <div class="aside__head">
+        <h2 id="recent-title" class="aside__title">{{ 'dashboard.recentTitle' | transloco }}</h2>
+        <a matButton routerLink="/transactions">{{ 'dashboard.seeAll' | transloco }}</a>
+      </div>
       @if (overview.loading() && !recent().length) {
         <app-skeleton-rows [count]="4" [label]="'dashboard.loadingTransactions' | transloco" />
       } @else if (!recent().length) {
@@ -172,12 +287,30 @@
           [message]="'dashboard.noTransactionsMessage' | transloco"
         />
       } @else {
-        <mat-list>
-          @for (entry of recent(); track entry.id) {
-            <app-transaction-row [entry]="entry" [link]="['/transactions', entry.id]" />
-          }
-        </mat-list>
+        <app-ledger-list [lines]="recent()" [label]="'dashboard.recentTitle' | transloco" />
       }
-    </mat-card-content>
-  </mat-card>
+    </mat-card>
+
+    <mat-card
+      appearance="outlined"
+      class="aside__section"
+      role="region"
+      aria-labelledby="upcoming-title"
+    >
+      <div class="aside__head">
+        <h2 id="upcoming-title" class="aside__title">
+          {{ 'dashboard.upcomingTitle' | transloco }}
+        </h2>
+        <a matButton routerLink="/recurring">{{ 'dashboard.seeAll' | transloco }}</a>
+      </div>
+      @if (upcomingTotal(); as total) {
+        <p class="aside__note">{{ 'dashboard.upcomingTotal' | transloco: { amount: total } }}</p>
+      }
+      @if (!upcoming().length) {
+        <p class="muted">{{ 'dashboard.nothingDue' | transloco }}</p>
+      } @else {
+        <app-ledger-list [lines]="upcoming()" [label]="'dashboard.upcomingTitle' | transloco" />
+      }
+    </mat-card>
+  </aside>
 </div>
